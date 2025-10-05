@@ -10,55 +10,48 @@ import { getNetworkByAlias, getSupportedChains } from './networkMap';
 
 // Utility function to extract meaningful error messages
 function extractErrorMessage(error: any): string {
-  // Handle SideShift API errors
-  if (error.response?.data?.message) {
-    return error.response.data.message;
-  }
-  
-  if (error.response?.data?.error) {
-    return error.response.data.error;
-  }
-  
+  // Handle SideShift API errors with response data
   if (error.response?.data) {
+    if (typeof error.response.data === 'string') {
+      return error.response.data;
+    }
+    
+    if (error.response.data.message) {
+      return error.response.data.message;
+    }
+    
+    if (error.response.data.error) {
+      return error.response.data.error;
+    }
+    
+    // If it's an object, try to extract useful info
     try {
-      const errorData = JSON.stringify(error.response.data);
-      if (errorData !== '{}') {
-        return `API Error: ${errorData}`;
+      const errorStr = JSON.stringify(error.response.data);
+      if (errorStr !== '{}') {
+        return `API Error: ${errorStr}`;
       }
     } catch (e) {
-      // JSON.stringify failed, continue to other methods
+      // Fall through to next check
     }
   }
   
   // Handle standard Error objects
-  if (error.message && typeof error.message === 'string') {
+  if (error.message && error.message !== '[object Object]' && error.message !== 'Error') {
+    return error.message;
+  }
+  
+  // Handle SideShiftError specifically
+  if (error instanceof SideShiftError && error.message) {
     return error.message;
   }
   
   // Handle string errors
-  if (typeof error === 'string') {
+  if (typeof error === 'string' && error !== '[object Object]') {
     return error;
   }
   
-  // Handle objects with custom toString
-  if (error.toString && typeof error.toString === 'function') {
-    const errorStr = error.toString();
-    if (errorStr !== '[object Object]' && errorStr !== 'Error') {
-      return errorStr;
-    }
-  }
-  
-  // Last resort: try to extract any useful information
-  try {
-    const errorJson = JSON.stringify(error, Object.getOwnPropertyNames(error));
-    if (errorJson !== '{}' && errorJson !== 'null') {
-      return `Error details: ${errorJson}`;
-    }
-  } catch (e) {
-    // JSON.stringify failed
-  }
-  
-  return 'An unknown error occurred';
+  // Last resort
+  return 'An unknown error occurred. Please try again or contact support.';
 }
 
 interface BotContext extends Context {
@@ -895,28 +888,41 @@ export class TelegramBotService {
       const userId = ctx.from?.id;
       const currentSession = userId ? userSessions.get(userId) : null;
       
-      // Use utility function to extract proper error message
-      const errorMessage = extractErrorMessage(error);
-      
       console.error('❌ Shift creation error details:', {
         message: error.message,
         response: error.response?.data,
         status: error.response?.status,
         stack: error.stack,
         userSession: currentSession,
-        address: address,
-        extractedMessage: errorMessage
+        address: address
       });
       
       logger.error({ 
         error, 
-        errorMessage, 
         userSession: currentSession, 
         address,
         userId: ctx.from?.id 
       }, 'Error creating shift order');
       
-      // Always use the extracted error message
+      // Better error message extraction
+      let errorMessage = 'An unknown error occurred';
+      
+      if (error.response?.data) {
+        if (typeof error.response.data === 'string') {
+          errorMessage = error.response.data;
+        } else if (error.response.data.message) {
+          errorMessage = error.response.data.message;
+        } else if (error.response.data.error) {
+          errorMessage = error.response.data.error;
+        } else {
+          errorMessage = `API Error: ${JSON.stringify(error.response.data)}`;
+        }
+      } else if (error.message && error.message !== '[object Object]') {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
       await ctx.reply(
         `❌ *Error creating order*\n\n${errorMessage}\n\n` +
         `Please try again or contact support if the issue persists.`,

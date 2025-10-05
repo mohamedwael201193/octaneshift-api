@@ -503,15 +503,118 @@ app.post('/api/test/user-scenario', express.json(), async (_req, res) => {
       message: error.message,
       response: error.response?.data,
       status: error.response?.status,
+      statusText: error.response?.statusText,
       stack: error.stack
     });
+    
+    // Better error extraction for debugging
+    let debugError = 'Unknown error';
+    if (error.response?.data) {
+      if (typeof error.response.data === 'string') {
+        debugError = error.response.data;
+      } else if (error.response.data.message) {
+        debugError = error.response.data.message;
+      } else if (error.response.data.error) {
+        debugError = error.response.data.error;
+      } else {
+        debugError = JSON.stringify(error.response.data);
+      }
+    } else if (error.message) {
+      debugError = error.message;
+    }
+    
+    res.status(500).json({
+      success: false,
+      error: debugError,
+      raw_error: error.message || 'Unknown error',
+      details: error.response?.data,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      full_error: JSON.stringify(error, Object.getOwnPropertyNames(error))
+    });
+  }
+});
+
+// Quick API test endpoint
+app.get('/api/test/quick-sideshift', async (_req, res) => {
+  try {
+    console.log('🧪 Quick SideShift API test...');
+    const sideshift = await import('./lib/sideshift');
+    
+    // Test just a simple pair request
+    const testPair = await sideshift.default.getPair({
+      from: 'usdt-ethereum',
+      to: 'eth-base'
+    });
+    
+    res.json({
+      success: true,
+      message: 'SideShift API is working',
+      pair: testPair
+    });
+    
+  } catch (error: any) {
+    console.error('❌ Quick SideShift test failed:', error);
     
     res.status(500).json({
       success: false,
       error: error.message || 'Unknown error',
       details: error.response?.data,
-      status: error.response?.status,
-      full_error: JSON.stringify(error, Object.getOwnPropertyNames(error))
+      status: error.response?.status
+    });
+  }
+});
+
+// Test error handling endpoint
+app.get('/api/test/error-handling', async (_req, res) => {
+  try {
+    console.log('🧪 Testing error handling...');
+    const sideshift = await import('./lib/sideshift');
+    
+    // Intentionally cause an error with invalid parameters
+    const badShift = await sideshift.default.createVariableShift({
+      depositCoin: 'invalid',
+      depositNetwork: 'invalid',
+      settleCoin: 'invalid', 
+      settleNetwork: 'invalid',
+      settleAddress: 'invalid-address'
+    });
+    
+    res.json({
+      success: true,
+      shift: badShift
+    });
+    
+  } catch (error: any) {
+    console.error('❌ Expected error for testing:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status
+    });
+    
+    // Test our error extraction logic
+    let extractedError = 'Unknown error';
+    if (error.response?.data) {
+      if (typeof error.response.data === 'string') {
+        extractedError = error.response.data;
+      } else if (error.response.data.message) {
+        extractedError = error.response.data.message;
+      } else if (error.response.data.error) {
+        extractedError = error.response.data.error;
+      } else {
+        extractedError = JSON.stringify(error.response.data);
+      }
+    } else if (error.message) {
+      extractedError = error.message;
+    }
+    
+    res.json({
+      success: false,
+      message: 'This error is expected - testing error handling',
+      extracted_error: extractedError,
+      raw_error: error.message,
+      response_data: error.response?.data,
+      status: error.response?.status
     });
   }
 });
