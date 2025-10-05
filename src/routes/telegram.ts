@@ -281,4 +281,42 @@ router.delete('/webhook', rateLimitConfig.general, async (req: Request, res: Res
   }
 });
 
+/**
+ * Debug webhook route registration
+ */
+router.get('/debug-routes', rateLimitConfig.general, async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
+    const baseUrl = process.env.APP_BASE_URL;
+    
+    const debug = {
+      environment: process.env.NODE_ENV,
+      webhook: {
+        secret_configured: !!webhookSecret,
+        secret_length: webhookSecret?.length || 0,
+        base_url: baseUrl || 'not configured',
+        full_webhook_url: baseUrl && webhookSecret ? `${baseUrl}/webhook/telegram/${webhookSecret}` : null,
+        expected_path: webhookSecret ? `/webhook/telegram/${webhookSecret}` : null
+      },
+      telegram: {
+        bot_token_configured: !!process.env.TELEGRAM_BOT_TOKEN,
+        admin_chat_configured: !!process.env.TELEGRAM_ADMIN_CHAT_ID
+      },
+      server: {
+        port: process.env.PORT || 3000,
+        uptime: process.uptime()
+      }
+    };
+
+    logger.info(debug, 'Debug routes info requested');
+    res.json(debug);
+  } catch (error) {
+    logger.error({ error }, 'Error getting debug routes info');
+    res.status(500).json({
+      error: 'Internal server error',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 export default router;

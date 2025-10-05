@@ -484,14 +484,19 @@ export class TelegramBotService {
       const startTime = Date.now();
       const userAgent = req.get('User-Agent') || 'unknown';
       const contentType = req.get('Content-Type') || 'unknown';
+      const telegramSecret = req.get('X-Telegram-Bot-Api-Secret-Token') || 'none';
       
       try {
-        // Log incoming webhook request
+        // Log incoming webhook request with more details
         logger.info({
           userAgent,
           contentType,
-          bodySize: JSON.stringify(req.body).length,
-          hasSecret: !!req.params.secret
+          telegramSecret,
+          bodySize: req.body ? JSON.stringify(req.body).length : 0,
+          hasSecret: !!req.params.secret,
+          path: req.path,
+          url: req.url,
+          method: req.method
         }, 'Incoming Telegram webhook request');
 
         // Validate webhook secret
@@ -505,7 +510,11 @@ export class TelegramBotService {
         }
 
         if (!secretParam) {
-          logger.warn('Webhook request missing secret parameter');
+          logger.warn({ 
+            path: req.path,
+            params: req.params,
+            query: req.query 
+          }, 'Webhook request missing secret parameter');
           res.status(400).json({ error: 'Missing secret parameter' });
           return;
         }
@@ -513,7 +522,8 @@ export class TelegramBotService {
         if (secretParam !== expectedSecret) {
           logger.warn({ 
             providedSecret: secretParam.substring(0, 5) + '...',
-            expectedPrefix: expectedSecret.substring(0, 5) + '...'
+            expectedPrefix: expectedSecret.substring(0, 5) + '...',
+            path: req.path
           }, 'Invalid webhook secret provided');
           res.status(401).json({ error: 'Unauthorized' });
           return;

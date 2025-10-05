@@ -25,14 +25,31 @@ async function initializeBot() {
     if (telegramBotService) {
       await telegramBotService.initialize();
       
-      // Set up webhook route for production
+      // Set up webhook route for production with proper middleware
       if (process.env.TELEGRAM_WEBHOOK_SECRET) {
+        const webhookPath = `/webhook/telegram/${process.env.TELEGRAM_WEBHOOK_SECRET}`;
+        
+        // Register the webhook route with explicit JSON parsing
         app.post(
-          `/webhook/telegram/${process.env.TELEGRAM_WEBHOOK_SECRET}`,
-          express.json(),
+          webhookPath,
+          express.json({ limit: '1mb' }), // Ensure JSON parsing for webhook
           telegramBotService.getWebhookHandler()
         );
-        logger.info('Telegram webhook route configured');
+        
+        // Add a test GET endpoint to verify the webhook route exists
+        app.get(webhookPath, (_req, res) => {
+          res.json({
+            message: 'Telegram webhook endpoint',
+            path: webhookPath,
+            method: 'POST required',
+            status: 'configured'
+          });
+        });
+        
+        logger.info({ 
+          webhookPath,
+          secret: process.env.TELEGRAM_WEBHOOK_SECRET 
+        }, 'Telegram webhook route configured');
       }
       
       logger.info('✅ Telegram bot initialized successfully');
@@ -399,42 +416,68 @@ process.on('unhandledRejection', async (reason, promise) => {
   process.exit(1);
 });
 
-// Start the server
-const server = app.listen(PORT, async () => {
-  logger.info({
-    port: PORT,
-    environment: process.env.NODE_ENV || 'development',
-    frontendOrigin: FRONTEND_ORIGIN,
-    telegramBot: !!telegramBotService
-  }, 'OctaneShift API server started');
-
-  // Initialize Telegram bot after server starts
+// Initialize Telegram bot before starting the server
+async function startServer() {
+  // Initialize bot first
   await initializeBot();
 
-  // Setup webhook for production only
-  if (telegramBotService && process.env.NODE_ENV === 'production' && process.env.APP_BASE_URL?.startsWith('https://')) {
-    try {
-      const webhookUrl = `${process.env.APP_BASE_URL}/webhook/telegram/${process.env.TELEGRAM_WEBHOOK_SECRET}`;
-      
-      const success = await telegramBotService.setWebhook(webhookUrl);
-      if (success) {
-        logger.info({ webhookUrl }, 'Telegram webhook configured successfully');
-      } else {
-        logger.warn('Failed to configure Telegram webhook automatically');
-      }
-    } catch (error) {
-      logger.error({ error }, 'Error setting up Telegram webhook');
-    }
-  }
-});
+  // Start the server
+  const server = app.listen(PORT, async () => {
+    logger.info({
+      port: PORT,
+      environment: process.env.NODE_ENV || 'development',
+      frontendOrigin: FRONTEND_ORIGIN,
+      telegramBot: !!telegramBotService
+    }, 'OctaneShift API server started');
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  logger.info('SIGTERM received, shutting down gracefully');
-  server.close(() => {
-    logger.info('Server closed');
-    process.exit(0);
+    // Log registered routes for debugging
+    if (process.env.NODE_ENV === 'production') {
+      const webhookPath = process.env.TELEGRAM_WEBHOOK_SECRET 
+        ? `/webhook/telegram/${process.env.TELEGRAM_WEBHOOK_SECRET}` 
+        : 'not configured';
+      
+      logger.info({
+        registeredRoutes: {
+          root: '/',
+          health: '/health',
+          api: '/api',
+          telegramRoutes: '/api/telegram',
+          webhook: webhookPath
+        }
+      }, 'Registered routes');
+    }
+
+    // Setup webhook for production only
+    if (telegramBotService && process.env.NODE_ENV === 'production' && process.env.APP_BASE_URL?.startsWith('https://')) {
+      try {
+        const webhookUrl = `${process.env.APP_BASE_URL}/webhook/telegram/${process.env.TELEGRAM_WEBHOOK_SECRET}`;
+        
+        const success = await telegramBotService.setWebhook(webhookUrl);
+        if (success) {
+          logger.info({ webhookUrl }, 'Telegram webhook configured successfully');
+        } else {
+          logger.warn('Failed to configure Telegram webhook automatically');
+        }
+      } catch (error) {
+        logger.error({ error }, 'Error setting up Telegram webhook');
+      }
+    }
   });
+
+  // Graceful shutdown
+  process.on('SIGTERM', () => {
+    logger.info('SIGTERM received, shutting down gracefully');
+    server.close(() => {
+      logger.info('Server closed');
+      process.exit(0);
+    });
+  });
+}
+
+// Start the application
+startServer().catch((error) => {
+  logger.fatal({ error }, 'Failed to start server');
+  process.exit(1);
 });
 
 // Export for testing
