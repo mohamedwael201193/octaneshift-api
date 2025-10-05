@@ -8,6 +8,59 @@ import { logger } from '../utils/logger';
 import { createBotConfig, getBotMode, isConfigValid, logBotConfig } from './config';
 import { getNetworkByAlias, getSupportedChains } from './networkMap';
 
+// Utility function to extract meaningful error messages
+function extractErrorMessage(error: any): string {
+  // Handle SideShift API errors
+  if (error.response?.data?.message) {
+    return error.response.data.message;
+  }
+  
+  if (error.response?.data?.error) {
+    return error.response.data.error;
+  }
+  
+  if (error.response?.data) {
+    try {
+      const errorData = JSON.stringify(error.response.data);
+      if (errorData !== '{}') {
+        return `API Error: ${errorData}`;
+      }
+    } catch (e) {
+      // JSON.stringify failed, continue to other methods
+    }
+  }
+  
+  // Handle standard Error objects
+  if (error.message && typeof error.message === 'string') {
+    return error.message;
+  }
+  
+  // Handle string errors
+  if (typeof error === 'string') {
+    return error;
+  }
+  
+  // Handle objects with custom toString
+  if (error.toString && typeof error.toString === 'function') {
+    const errorStr = error.toString();
+    if (errorStr !== '[object Object]' && errorStr !== 'Error') {
+      return errorStr;
+    }
+  }
+  
+  // Last resort: try to extract any useful information
+  try {
+    const errorJson = JSON.stringify(error, Object.getOwnPropertyNames(error));
+    if (errorJson !== '{}' && errorJson !== 'null') {
+      return `Error details: ${errorJson}`;
+    }
+  } catch (e) {
+    // JSON.stringify failed
+  }
+  
+  return 'An unknown error occurred';
+}
+
 interface BotContext extends Context {
   match?: RegExpExecArray | null;
 }
@@ -682,36 +735,29 @@ export class TelegramBotService {
     } catch (error) {
       logger.error({ error, data, depositCoin, depositNetwork }, 'Error handling deposit selection');
       
+      // Use utility function to extract proper error message
+      const errorMessage = extractErrorMessage(error);
+      
       if (error instanceof SideShiftError) {
-        let errorMessage = `❌ *Error getting quote*\n\n${error.message}`;
+        let fullErrorMessage = `❌ *Error getting quote*\n\n${errorMessage}`;
         
         // Handle minimum amount errors specifically
-        if (error.message.includes('below the minimum')) {
+        if (errorMessage.includes('below the minimum')) {
           const asset = COMMON_DEPOSIT_ASSETS.find(a => 
             a.coin === depositCoin && a.network === depositNetwork
           );
           if (asset) {
-            errorMessage += `\n\n💡 *Tip:* Try with at least ${asset.minAmount} ${depositCoin.toUpperCase()} for this pair.`;
+            fullErrorMessage += `\n\n💡 *Tip:* Try with at least ${asset.minAmount} ${depositCoin.toUpperCase()} for this pair.`;
           }
         }
         
-        await ctx.reply(errorMessage, { parse_mode: 'Markdown' });
+        await ctx.reply(fullErrorMessage, { parse_mode: 'Markdown' });
       } else {
-        // Fallback error handling - try to extract meaningful message
-        let errorMessage = '❌ An error occurred while getting the quote.';
-        
-        if (error && typeof error === 'object') {
-          if ('message' in error && typeof error.message === 'string') {
-            errorMessage = `❌ *Error getting quote*\n\n${error.message}`;
-          } else if ('toString' in error) {
-            const errorStr = error.toString();
-            if (errorStr !== '[object Object]') {
-              errorMessage = `❌ *Error getting quote*\n\n${errorStr}`;
-            }
-          }
-        }
-        
-        await ctx.reply(errorMessage, { parse_mode: 'Markdown' });
+        await ctx.reply(
+          `❌ *Error getting quote*\n\n${errorMessage}\n\n` +
+          `Please try again or contact support if the issue persists.`,
+          { parse_mode: 'Markdown' }
+        );
       }
     }
   }
@@ -796,7 +842,9 @@ export class TelegramBotService {
         throw new Error('SideShift API is currently unavailable. Please try again later.');
       }
 
+      console.log('🚀 About to call createVariableShift with params:', shiftParams);
       const shift = await sideshift.createVariableShift(shiftParams);
+      console.log('✅ Shift created successfully:', shift.id);
 
       // Clear session
       userSessions.delete(userId);
@@ -847,28 +895,18 @@ export class TelegramBotService {
       const userId = ctx.from?.id;
       const currentSession = userId ? userSessions.get(userId) : null;
       
+      // Use utility function to extract proper error message
+      const errorMessage = extractErrorMessage(error);
+      
       console.error('❌ Shift creation error details:', {
         message: error.message,
         response: error.response?.data,
         status: error.response?.status,
         stack: error.stack,
         userSession: currentSession,
-        address: address
+        address: address,
+        extractedMessage: errorMessage
       });
-      
-      let errorMessage = 'Unknown error occurred';
-      
-      if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.response?.data?.error) {
-        errorMessage = error.response.data.error;
-      } else if (error.message) {
-        errorMessage = error.message;
-      } else if (typeof error === 'string') {
-        errorMessage = error;
-      } else if (error.toString && error.toString() !== '[object Object]') {
-        errorMessage = error.toString();
-      }
       
       logger.error({ 
         error, 
@@ -878,19 +916,12 @@ export class TelegramBotService {
         userId: ctx.from?.id 
       }, 'Error creating shift order');
       
-      if (error instanceof SideShiftError) {
-        await ctx.reply(
-          `❌ *Error creating order*\n\n${errorMessage}\n\n` +
-          `Please try again or contact support if the issue persists.`,
-          { parse_mode: 'Markdown' }
-        );
-      } else {
-        await ctx.reply(
-          `❌ *Error creating order*\n\n${errorMessage}\n\n` +
-          `Please try again or contact support if the issue persists.`,
-          { parse_mode: 'Markdown' }
-        );
-      }
+      // Always use the extracted error message
+      await ctx.reply(
+        `❌ *Error creating order*\n\n${errorMessage}\n\n` +
+        `Please try again or contact support if the issue persists.`,
+        { parse_mode: 'Markdown' }
+      );
     }
   }
 

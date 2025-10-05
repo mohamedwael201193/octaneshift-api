@@ -459,6 +459,63 @@ app.get('/api/test/sideshift-health', async (_req, res) => {
   }
 });
 
+// Test exact user scenario endpoint
+app.post('/api/test/user-scenario', express.json(), async (_req, res) => {
+  try {
+    console.log('🧪 Testing exact user scenario...');
+    const sideshift = await import('./lib/sideshift');
+    
+    // Test the exact parameters from the user's conversation
+    const userParams = {
+      depositCoin: 'usdt',
+      depositNetwork: 'ethereum',
+      settleCoin: 'eth',
+      settleNetwork: 'base',
+      settleAddress: '0xe1641A049381149AFAacef386ee58fDA5ad9Be32'
+    };
+    
+    console.log('🧪 Testing with user parameters:', userParams);
+    
+    // First test the pair
+    const pairParams = {
+      from: `${userParams.depositCoin}-${userParams.depositNetwork}`,
+      to: `${userParams.settleCoin}-${userParams.settleNetwork}`
+    };
+    
+    console.log('🧪 Getting pair info...');
+    const pair = await sideshift.default.getPair(pairParams);
+    console.log('✅ Pair info received:', pair);
+    
+    // Now test shift creation
+    console.log('🧪 Creating shift...');
+    const shift = await sideshift.default.createVariableShift(userParams);
+    console.log('✅ Shift created:', shift);
+    
+    res.json({
+      success: true,
+      pair,
+      shift,
+      message: 'User scenario test successful'
+    });
+    
+  } catch (error: any) {
+    console.error('❌ User scenario test failed:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status,
+      stack: error.stack
+    });
+    
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Unknown error',
+      details: error.response?.data,
+      status: error.response?.status,
+      full_error: JSON.stringify(error, Object.getOwnPropertyNames(error))
+    });
+  }
+});
+
 // DIRECT WEBHOOK REGISTRATION - MUST WORK
 if (process.env.TELEGRAM_WEBHOOK_SECRET) {
   const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
