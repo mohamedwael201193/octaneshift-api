@@ -24,86 +24,6 @@ async function initializeBot() {
     
     if (telegramBotService) {
       await telegramBotService.initialize();
-      
-      // Direct webhook route registration with enhanced logging
-      const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
-      if (webhookSecret) {
-        const webhookPath = `/webhook/telegram/${webhookSecret}`;
-        
-        console.log('🔧 Registering webhook route:', webhookPath);
-        logger.info({ webhookPath, secret: webhookSecret }, 'Registering webhook route');
-        
-        // Register POST route for webhook with direct handling
-        app.post(webhookPath, express.json({ limit: '1mb' }), (req, res): void => {
-          const startTime = Date.now();
-          console.log('📡 Webhook request received:', req.method, req.path);
-          
-          try {
-            // Validate request body
-            if (!req.body || typeof req.body !== 'object') {
-              console.log('❌ Invalid webhook body');
-              res.status(400).json({ error: 'Invalid request body' });
-              return;
-            }
-
-            const update = req.body;
-            
-            // Validate update structure
-            if (!update.update_id || typeof update.update_id !== 'number') {
-              console.log('❌ Invalid update structure:', update);
-              res.status(400).json({ error: 'Invalid update structure' });
-              return;
-            }
-
-            console.log('✅ Processing webhook update:', update.update_id);
-            logger.info({ 
-              updateId: update.update_id,
-              hasMessage: 'message' in update,
-              hasCallbackQuery: 'callback_query' in update
-            }, 'Processing Telegram webhook update');
-
-            // Process the update with the bot
-            telegramBotService!.handleUpdate(update);
-            
-            const processingTime = Date.now() - startTime;
-            console.log(`✅ Webhook processed successfully in ${processingTime}ms`);
-            
-            res.status(200).json({ 
-              ok: true, 
-              processed_at: new Date().toISOString(),
-              processing_time: processingTime
-            });
-            
-          } catch (error) {
-            const processingTime = Date.now() - startTime;
-            console.error('❌ Webhook processing error:', error);
-            logger.error({ error, processingTime }, 'Webhook processing error');
-            
-            res.status(500).json({ 
-              error: 'Internal server error',
-              timestamp: new Date().toISOString()
-            });
-          }
-        });
-        
-        // Register GET route for testing
-        app.get(webhookPath, (_req, res) => {
-          res.json({
-            message: 'Telegram webhook endpoint',
-            path: webhookPath,
-            method: 'POST required for webhook',
-            status: 'active',
-            timestamp: new Date().toISOString()
-          });
-        });
-        
-        console.log('✅ Webhook routes registered successfully at:', webhookPath);
-        logger.info({ webhookPath }, 'Webhook routes registered successfully');
-      } else {
-        console.log('❌ Webhook route not registered - missing TELEGRAM_WEBHOOK_SECRET');
-        logger.warn('Webhook route not registered - missing TELEGRAM_WEBHOOK_SECRET');
-      }
-      
       logger.info('✅ Telegram bot initialized successfully');
     } else {
       logger.warn('⚠️ Telegram bot is disabled');
@@ -434,6 +354,78 @@ app.get('/api/bot/test', rateLimitConfig.general, async (_req, res): Promise<voi
 app.use('/api', sideshiftRoutes);
 app.use('/api/telegram', telegramRoutes);
 
+// DIRECT WEBHOOK REGISTRATION - MUST WORK
+if (process.env.TELEGRAM_WEBHOOK_SECRET) {
+  const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
+  const webhookPath = `/webhook/telegram/${webhookSecret}`;
+  
+  console.log('🔧 DIRECT route registration:', webhookPath);
+  
+  // POST webhook handler
+  app.post(webhookPath, express.json(), (req, res): void => {
+    console.log('📡 WEBHOOK CALLED:', req.method, req.path, 'from:', req.ip);
+    
+    try {
+      // Validate secret from header (Telegram sends this)
+      const telegramSecret = req.headers['x-telegram-bot-api-secret-token'];
+      if (telegramSecret !== webhookSecret) {
+        console.log('❌ Invalid secret:', telegramSecret, 'expected:', webhookSecret);
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+      
+      const update = req.body;
+      console.log('✅ Processing update:', update.update_id);
+      
+      // Process with bot (only if bot is available)
+      if (telegramBotService) {
+        telegramBotService.handleUpdate(update);
+        console.log('✅ Webhook processed successfully');
+        res.status(200).json({ ok: true });
+      } else {
+        console.log('❌ Bot service not available');
+        res.status(503).json({ error: 'Bot service not available' });
+      }
+      
+    } catch (error) {
+      console.error('❌ Webhook error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  // GET test handler
+  app.get(webhookPath, (req, res) => {
+    console.log('📡 GET webhook test from:', req.ip);
+    res.status(200).json({
+      message: 'Webhook endpoint active',
+      method: 'POST required for Telegram',
+      status: 'working',
+      timestamp: new Date().toISOString()
+    });
+  });
+  
+  console.log('✅ DIRECT routes registered at:', webhookPath);
+  
+  // Add fallback webhook route for debugging
+  app.all('/webhook/telegram/*', (req, res) => {
+    console.log('🚨 FALLBACK webhook route called:', req.method, req.path, 'from:', req.ip);
+    console.log('🚨 Expected path was:', webhookPath);
+    res.status(404).json({
+      error: 'Webhook path not found',
+      received_path: req.path,
+      expected_path: webhookPath,
+      message: 'Check webhook URL configuration'
+    });
+  });
+  
+  // Test route exists
+  setTimeout(() => {
+    console.log('🧪 Testing route registration...');
+    console.log('🧪 Webhook route should be accessible at:', webhookPath);
+    // This will help verify if route is actually registered
+  }, 1000);
+}
+
 // Handle 404 for unmatched routes
 app.use(notFoundHandler);
 
@@ -471,6 +463,13 @@ process.on('unhandledRejection', async (reason, promise) => {
 
 // Initialize Telegram bot before starting the server
 async function startServer() {
+  console.log('🚀 Starting server initialization...');
+  console.log('📝 Routes will be registered in this order:');
+  console.log('  1. Security middleware');
+  console.log('  2. API routes (/api, /api/telegram)');
+  console.log('  3. DIRECT webhook routes');
+  console.log('  4. Error handlers');
+  
   // Initialize bot first
   await initializeBot();
 
@@ -482,6 +481,9 @@ async function startServer() {
       frontendOrigin: FRONTEND_ORIGIN,
       telegramBot: !!telegramBotService
     }, 'OctaneShift API server started');
+
+    console.log('🎯 Server is now listening on port', PORT);
+    console.log('🔍 Route registration verification:');
 
     // Log registered routes for debugging
     if (process.env.NODE_ENV === 'production') {

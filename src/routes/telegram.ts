@@ -282,6 +282,61 @@ router.delete('/webhook', rateLimitConfig.general, async (req: Request, res: Res
 });
 
 /**
+ * Test direct webhook endpoint access
+ */
+router.get('/test-direct-webhook', rateLimitConfig.general, async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
+    const baseUrl = process.env.APP_BASE_URL;
+    
+    if (!webhookSecret || !baseUrl) {
+      res.status(400).json({
+        error: 'Webhook not configured',
+        webhook_secret: !!webhookSecret,
+        base_url: !!baseUrl
+      });
+      return;
+    }
+
+    const webhookUrl = `${baseUrl}/webhook/telegram/${webhookSecret}`;
+    
+    try {
+      // Test the webhook endpoint with a GET request
+      const testResponse = await request(webhookUrl, { method: 'GET' });
+      const testData = await testResponse.body.json() as any;
+      
+      res.json({
+        webhook_test: {
+          url: webhookUrl,
+          status: testResponse.statusCode,
+          response: testData,
+          accessible: testResponse.statusCode === 200
+        },
+        message: testResponse.statusCode === 200 
+          ? 'Webhook endpoint is accessible!' 
+          : 'Webhook endpoint returned error'
+      });
+      
+    } catch (error) {
+      res.json({
+        webhook_test: {
+          url: webhookUrl,
+          accessible: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        },
+        message: 'Webhook endpoint is not accessible'
+      });
+    }
+  } catch (error) {
+    logger.error({ error }, 'Error testing direct webhook');
+    res.status(500).json({
+      error: 'Internal server error',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
  * Debug webhook route registration
  */
 router.get('/debug-routes', rateLimitConfig.general, async (_req: Request, res: Response): Promise<void> => {
