@@ -904,24 +904,8 @@ export class TelegramBotService {
         userId: ctx.from?.id 
       }, 'Error creating shift order');
       
-      // Better error message extraction
-      let errorMessage = 'An unknown error occurred';
-      
-      if (error.response?.data) {
-        if (typeof error.response.data === 'string') {
-          errorMessage = error.response.data;
-        } else if (error.response.data.message) {
-          errorMessage = error.response.data.message;
-        } else if (error.response.data.error) {
-          errorMessage = error.response.data.error;
-        } else {
-          errorMessage = `API Error: ${JSON.stringify(error.response.data)}`;
-        }
-      } else if (error.message && error.message !== '[object Object]') {
-        errorMessage = error.message;
-      } else if (typeof error === 'string') {
-        errorMessage = error;
-      }
+      // Use the centralized error extraction function
+      const errorMessage = extractErrorMessage(error);
       
       await ctx.reply(
         `❌ *Error creating order*\n\n${errorMessage}\n\n` +

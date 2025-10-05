@@ -459,8 +459,8 @@ app.get('/api/test/sideshift-health', async (_req, res) => {
   }
 });
 
-// Test exact user scenario endpoint
-app.post('/api/test/user-scenario', express.json(), async (_req, res) => {
+// Test exact user scenario endpoint - both GET and POST for convenience
+const userScenarioHandler = async (_req: any, res: any) => {
   try {
     console.log('🧪 Testing exact user scenario...');
     const sideshift = await import('./lib/sideshift');
@@ -491,6 +491,12 @@ app.post('/api/test/user-scenario', express.json(), async (_req, res) => {
     const shift = await sideshift.default.createVariableShift(userParams);
     console.log('✅ Shift created:', shift);
     
+    res.json({
+      success: true,
+      pair,
+      shift,
+      message: 'User scenario test successful'
+    });
     res.json({
       success: true,
       pair,
@@ -533,7 +539,11 @@ app.post('/api/test/user-scenario', express.json(), async (_req, res) => {
       full_error: JSON.stringify(error, Object.getOwnPropertyNames(error))
     });
   }
-});
+};
+
+// Register both GET and POST routes for user scenario testing
+app.get('/api/test/user-scenario', userScenarioHandler);
+app.post('/api/test/user-scenario', express.json(), userScenarioHandler);
 
 // Quick API test endpoint
 app.get('/api/test/quick-sideshift', async (_req, res) => {
