@@ -25,31 +25,83 @@ async function initializeBot() {
     if (telegramBotService) {
       await telegramBotService.initialize();
       
-      // Set up webhook route for production with proper middleware
-      if (process.env.TELEGRAM_WEBHOOK_SECRET) {
-        const webhookPath = `/webhook/telegram/${process.env.TELEGRAM_WEBHOOK_SECRET}`;
+      // Direct webhook route registration with enhanced logging
+      const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
+      if (webhookSecret) {
+        const webhookPath = `/webhook/telegram/${webhookSecret}`;
         
-        // Register the webhook route with explicit JSON parsing
-        app.post(
-          webhookPath,
-          express.json({ limit: '1mb' }), // Ensure JSON parsing for webhook
-          telegramBotService.getWebhookHandler()
-        );
+        console.log('🔧 Registering webhook route:', webhookPath);
+        logger.info({ webhookPath, secret: webhookSecret }, 'Registering webhook route');
         
-        // Add a test GET endpoint to verify the webhook route exists
+        // Register POST route for webhook with direct handling
+        app.post(webhookPath, express.json({ limit: '1mb' }), (req, res): void => {
+          const startTime = Date.now();
+          console.log('📡 Webhook request received:', req.method, req.path);
+          
+          try {
+            // Validate request body
+            if (!req.body || typeof req.body !== 'object') {
+              console.log('❌ Invalid webhook body');
+              res.status(400).json({ error: 'Invalid request body' });
+              return;
+            }
+
+            const update = req.body;
+            
+            // Validate update structure
+            if (!update.update_id || typeof update.update_id !== 'number') {
+              console.log('❌ Invalid update structure:', update);
+              res.status(400).json({ error: 'Invalid update structure' });
+              return;
+            }
+
+            console.log('✅ Processing webhook update:', update.update_id);
+            logger.info({ 
+              updateId: update.update_id,
+              hasMessage: 'message' in update,
+              hasCallbackQuery: 'callback_query' in update
+            }, 'Processing Telegram webhook update');
+
+            // Process the update with the bot
+            telegramBotService!.handleUpdate(update);
+            
+            const processingTime = Date.now() - startTime;
+            console.log(`✅ Webhook processed successfully in ${processingTime}ms`);
+            
+            res.status(200).json({ 
+              ok: true, 
+              processed_at: new Date().toISOString(),
+              processing_time: processingTime
+            });
+            
+          } catch (error) {
+            const processingTime = Date.now() - startTime;
+            console.error('❌ Webhook processing error:', error);
+            logger.error({ error, processingTime }, 'Webhook processing error');
+            
+            res.status(500).json({ 
+              error: 'Internal server error',
+              timestamp: new Date().toISOString()
+            });
+          }
+        });
+        
+        // Register GET route for testing
         app.get(webhookPath, (_req, res) => {
           res.json({
             message: 'Telegram webhook endpoint',
             path: webhookPath,
-            method: 'POST required',
-            status: 'configured'
+            method: 'POST required for webhook',
+            status: 'active',
+            timestamp: new Date().toISOString()
           });
         });
         
-        logger.info({ 
-          webhookPath,
-          secret: process.env.TELEGRAM_WEBHOOK_SECRET 
-        }, 'Telegram webhook route configured');
+        console.log('✅ Webhook routes registered successfully at:', webhookPath);
+        logger.info({ webhookPath }, 'Webhook routes registered successfully');
+      } else {
+        console.log('❌ Webhook route not registered - missing TELEGRAM_WEBHOOK_SECRET');
+        logger.warn('Webhook route not registered - missing TELEGRAM_WEBHOOK_SECRET');
       }
       
       logger.info('✅ Telegram bot initialized successfully');
@@ -57,6 +109,7 @@ async function initializeBot() {
       logger.warn('⚠️ Telegram bot is disabled');
     }
   } catch (error) {
+    console.error('❌ Failed to initialize Telegram bot:', error);
     logger.error({ error }, '❌ Failed to initialize Telegram bot');
   }
 }
@@ -435,6 +488,14 @@ async function startServer() {
       const webhookPath = process.env.TELEGRAM_WEBHOOK_SECRET 
         ? `/webhook/telegram/${process.env.TELEGRAM_WEBHOOK_SECRET}` 
         : 'not configured';
+      
+      console.log('📋 Registered routes summary:');
+      console.log('  • Root:', '/');
+      console.log('  • Health:', '/health');
+      console.log('  • API:', '/api');
+      console.log('  • Telegram routes:', '/api/telegram');
+      console.log('  • Webhook POST:', webhookPath);
+      console.log('  • Webhook GET:', webhookPath, '(test endpoint)');
       
       logger.info({
         registeredRoutes: {

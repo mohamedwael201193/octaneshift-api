@@ -294,6 +294,7 @@ router.get('/debug-routes', rateLimitConfig.general, async (_req: Request, res: 
       webhook: {
         secret_configured: !!webhookSecret,
         secret_length: webhookSecret?.length || 0,
+        secret_value: webhookSecret ? `${webhookSecret.substring(0, 5)}...${webhookSecret.substring(webhookSecret.length - 3)}` : null,
         base_url: baseUrl || 'not configured',
         full_webhook_url: baseUrl && webhookSecret ? `${baseUrl}/webhook/telegram/${webhookSecret}` : null,
         expected_path: webhookSecret ? `/webhook/telegram/${webhookSecret}` : null
@@ -305,6 +306,12 @@ router.get('/debug-routes', rateLimitConfig.general, async (_req: Request, res: 
       server: {
         port: process.env.PORT || 3000,
         uptime: process.uptime()
+      },
+      test_endpoints: {
+        webhook_get: baseUrl && webhookSecret ? `${baseUrl}/webhook/telegram/${webhookSecret}` : null,
+        webhook_post: baseUrl && webhookSecret ? `${baseUrl}/webhook/telegram/${webhookSecret}` : null,
+        telegram_status: baseUrl ? `${baseUrl}/api/telegram/status` : null,
+        bot_status: baseUrl ? `${baseUrl}/api/bot/status` : null
       }
     };
 

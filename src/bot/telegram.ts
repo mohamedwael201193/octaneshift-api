@@ -83,6 +83,15 @@ export class TelegramBotService {
     }
   }
 
+  public handleUpdate(update: Update): void {
+    try {
+      this.bot.handleUpdate(update);
+    } catch (error) {
+      logger.error({ error, updateId: update.update_id }, 'Error handling update');
+      throw error;
+    }
+  }
+
   private setupCommands(): void {
     // Start command
     this.bot.start((ctx) => {
