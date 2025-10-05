@@ -481,24 +481,94 @@ export class TelegramBotService {
 
   public getWebhookHandler() {
     return (req: Request, res: Response): void => {
+      const startTime = Date.now();
+      const userAgent = req.get('User-Agent') || 'unknown';
+      const contentType = req.get('Content-Type') || 'unknown';
+      
       try {
+        // Log incoming webhook request
+        logger.info({
+          userAgent,
+          contentType,
+          bodySize: JSON.stringify(req.body).length,
+          hasSecret: !!req.params.secret
+        }, 'Incoming Telegram webhook request');
+
+        // Validate webhook secret
         const secretParam = req.params.secret;
         const expectedSecret = this.config.webhookSecret;
 
-        if (!expectedSecret || secretParam !== expectedSecret) {
-          logger.warn({ providedSecret: secretParam }, 'Invalid webhook secret');
+        if (!expectedSecret) {
+          logger.error('Webhook secret not configured on server');
+          res.status(500).json({ error: 'Server configuration error' });
+          return;
+        }
+
+        if (!secretParam) {
+          logger.warn('Webhook request missing secret parameter');
+          res.status(400).json({ error: 'Missing secret parameter' });
+          return;
+        }
+
+        if (secretParam !== expectedSecret) {
+          logger.warn({ 
+            providedSecret: secretParam.substring(0, 5) + '...',
+            expectedPrefix: expectedSecret.substring(0, 5) + '...'
+          }, 'Invalid webhook secret provided');
           res.status(401).json({ error: 'Unauthorized' });
           return;
         }
 
-        const update = req.body as Update;
-        logger.debug({ updateId: update.update_id }, 'Processing Telegram webhook');
+        // Validate request body
+        if (!req.body || typeof req.body !== 'object') {
+          logger.warn({ body: req.body }, 'Invalid webhook body');
+          res.status(400).json({ error: 'Invalid request body' });
+          return;
+        }
 
+        const update = req.body as Update;
+        
+        // Validate update structure
+        if (!update.update_id || typeof update.update_id !== 'number') {
+          logger.warn({ update }, 'Invalid update structure');
+          res.status(400).json({ error: 'Invalid update structure' });
+          return;
+        }
+
+        // Log successful webhook processing start
+        logger.info({ 
+          updateId: update.update_id,
+          hasMessage: 'message' in update,
+          hasCallbackQuery: 'callback_query' in update,
+          messageType: 'message' in update && update.message && 'text' in update.message ? 'text' : 'other',
+          userId: ('message' in update && update.message?.from?.id) || 
+                  ('callback_query' in update && update.callback_query?.from?.id) || null
+        }, 'Processing Telegram webhook update');
+
+        // Process the update
         this.bot.handleUpdate(update);
-        res.status(200).json({ ok: true });
+        
+        const processingTime = Date.now() - startTime;
+        logger.info({ 
+          updateId: update.update_id,
+          processingTime 
+        }, 'Webhook processed successfully');
+
+        res.status(200).json({ ok: true, processed_at: new Date().toISOString() });
+        
       } catch (error) {
-        logger.error({ error }, 'Telegram webhook error');
-        res.status(500).json({ error: 'Internal server error' });
+        const processingTime = Date.now() - startTime;
+        logger.error({ 
+          error, 
+          userAgent,
+          processingTime,
+          body: req.body
+        }, 'Telegram webhook processing error');
+        
+        res.status(500).json({ 
+          error: 'Internal server error',
+          timestamp: new Date().toISOString()
+        });
       }
     };
   }

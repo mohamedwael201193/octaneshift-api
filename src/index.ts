@@ -8,6 +8,7 @@ import { errorHandler, notFoundHandler } from './middleware/errors';
 import { extractClientIP } from './middleware/ip';
 import { rateLimitConfig } from './middleware/rateLimit';
 import sideshiftRoutes from './routes/sideshift';
+import telegramRoutes from './routes/telegram';
 import { logger } from './utils/logger';
 
 const app = express();
@@ -120,6 +121,41 @@ app.use(express.urlencoded({
 // Extract client IP middleware
 app.use(extractClientIP);
 
+// Root route - API information
+app.get('/', rateLimitConfig.health, (req, res) => {
+  const webhookUrl = process.env.APP_BASE_URL && process.env.TELEGRAM_WEBHOOK_SECRET 
+    ? `${process.env.APP_BASE_URL}/webhook/telegram/${process.env.TELEGRAM_WEBHOOK_SECRET}`
+    : null;
+
+  const apiInfo = {
+    name: 'OctaneShift API',
+    description: 'Cross-chain gas top-up service powered by SideShift.ai',
+    version: process.env.npm_package_version || '1.0.0',
+    environment: process.env.NODE_ENV || 'development',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    endpoints: {
+      health: '/health',
+      api: '/api',
+      telegram_debug: '/api/telegram'
+    },
+    telegram: {
+      bot_enabled: !!telegramBotService,
+      mode: telegramBotService ? 'active' : 'disabled',
+      webhook_url: webhookUrl,
+      webhook_configured: !!process.env.TELEGRAM_WEBHOOK_SECRET
+    },
+    links: {
+      health_check: `${req.protocol}://${req.get('host')}/health`,
+      api_docs: `${req.protocol}://${req.get('host')}/api`,
+      telegram_status: `${req.protocol}://${req.get('host')}/api/telegram/status`
+    }
+  };
+
+  logger.debug(apiInfo, 'Root API info requested');
+  res.json(apiInfo);
+});
+
 // Health check endpoint
 app.get('/health', rateLimitConfig.health, (_req, res) => {
   const healthData = {
@@ -137,6 +173,7 @@ app.get('/health', rateLimitConfig.health, (_req, res) => {
 
 // API routes
 app.use('/api', sideshiftRoutes);
+app.use('/api/telegram', telegramRoutes);
 
 // Handle 404 for unmatched routes
 app.use(notFoundHandler);
