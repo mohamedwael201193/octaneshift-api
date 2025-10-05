@@ -354,6 +354,111 @@ app.get('/api/bot/test', rateLimitConfig.general, async (_req, res): Promise<voi
 app.use('/api', sideshiftRoutes);
 app.use('/api/telegram', telegramRoutes);
 
+// Debug endpoint for SideShift order creation
+app.post('/api/test/create-shift', express.json(), async (req, res) => {
+  try {
+    const { depositCoin, settleCoin, settleAddress, depositNetwork, settleNetwork, amount } = req.body;
+    
+    console.log('🧪 Testing shift creation with params:', {
+      depositCoin,
+      settleCoin, 
+      settleAddress,
+      depositNetwork,
+      settleNetwork,
+      amount
+    });
+    
+    // Import the SideShift service
+    const sideshift = await import('./lib/sideshift');
+    
+    // Test the pair first
+    const pairParams = {
+      from: `${depositCoin}-${depositNetwork}`,
+      to: `${settleCoin}-${settleNetwork}`,
+      amount: amount
+    };
+    
+    console.log('🧪 Getting pair info with params:', pairParams);
+    const pair = await sideshift.default.getPair(pairParams);
+    console.log('✅ Pair info received:', pair);
+    
+    // Test shift creation
+    const shiftParams = {
+      depositCoin,
+      depositNetwork,
+      settleCoin,
+      settleNetwork,
+      settleAddress
+    };
+    
+    console.log('🧪 Creating shift with params:', shiftParams);
+    const shift = await sideshift.default.createVariableShift(shiftParams);
+    console.log('✅ Shift created:', shift);
+    
+    res.json({
+      success: true,
+      pair,
+      shift
+    });
+    
+  } catch (error: any) {
+    console.error('❌ Detailed SideShift error:', {
+      message: error.message,
+      stack: error.stack,
+      response: error.response?.data,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      full_error: JSON.stringify(error, Object.getOwnPropertyNames(error))
+    });
+    
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Unknown error',
+      details: error.response?.data,
+      status: error.response?.status,
+      full_error: JSON.stringify(error, Object.getOwnPropertyNames(error))
+    });
+  }
+});
+
+// SideShift API health check endpoint
+app.get('/api/test/sideshift-health', async (_req, res) => {
+  try {
+    console.log('🧪 Testing SideShift API health...');
+    const sideshift = await import('./lib/sideshift');
+    
+    // Test basic API connectivity with permissions endpoint
+    const permissions = await sideshift.default.getPermissions();
+    console.log('✅ SideShift API is responding:', permissions);
+    
+    // Test a simple pair request
+    const testPair = await sideshift.default.getPair({
+      from: 'usdt-ethereum',
+      to: 'eth-base'
+    });
+    console.log('✅ SideShift pair request working:', testPair);
+    
+    res.json({
+      success: true,
+      api_status: 'healthy',
+      permissions,
+      sample_pair: testPair,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error: any) {
+    console.error('❌ SideShift API health check failed:', error);
+    
+    res.status(500).json({
+      success: false,
+      api_status: 'unhealthy',
+      error: error.message || 'Unknown error',
+      details: error.response?.data,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 // DIRECT WEBHOOK REGISTRATION - MUST WORK
 if (process.env.TELEGRAM_WEBHOOK_SECRET) {
   const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;

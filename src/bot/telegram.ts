@@ -751,14 +751,52 @@ export class TelegramBotService {
       // Create the shift
       await ctx.reply('🔄 *Creating order...*', { parse_mode: 'Markdown' });
 
-      const shift = await sideshift.createVariableShift({
+      // Validate session data before making API call
+      if (!session.quote) {
+        throw new Error('Quote not found in session. Please restart the process.');
+      }
+
+      if (!session.quote.depositCoin || !session.quote.settleCoin) {
+        throw new Error('Invalid quote data: missing coin information.');
+      }
+
+      if (!session.quote.depositNetwork || !session.quote.settleNetwork) {
+        throw new Error('Invalid quote data: missing network information.');
+      }
+
+      const shiftParams = {
         settleAddress: address,
         depositCoin: session.quote!.depositCoin,
         settleCoin: session.quote!.settleCoin,
         depositNetwork: session.quote!.depositNetwork,
         settleNetwork: session.quote!.settleNetwork,
         affiliateId: process.env.SIDESHIFT_AFFILIATE_ID
+      };
+
+      // Debug logging for shift creation
+      console.log('🔧 Creating SideShift with parameters:', {
+        ...shiftParams,
+        sessionQuote: session.quote,
+        targetNetwork: session.targetNetwork,
+        targetAmount: session.targetAmount
       });
+      
+      logger.info({
+        shiftParams,
+        sessionQuote: session.quote,
+        userId,
+        targetNetwork: session.targetNetwork
+      }, 'Creating SideShift order');
+
+      // Check SideShift API health before creating shift
+      try {
+        await sideshift.getPermissions();
+      } catch (apiError) {
+        console.error('❌ SideShift API health check failed:', apiError);
+        throw new Error('SideShift API is currently unavailable. Please try again later.');
+      }
+
+      const shift = await sideshift.createVariableShift(shiftParams);
 
       // Clear session
       userSessions.delete(userId);
@@ -805,15 +843,53 @@ export class TelegramBotService {
         });
       }
 
-    } catch (error) {
+    } catch (error: any) {
+      const userId = ctx.from?.id;
+      const currentSession = userId ? userSessions.get(userId) : null;
+      
+      console.error('❌ Shift creation error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        stack: error.stack,
+        userSession: currentSession,
+        address: address
+      });
+      
+      let errorMessage = 'Unknown error occurred';
+      
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error.message) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      } else if (error.toString && error.toString() !== '[object Object]') {
+        errorMessage = error.toString();
+      }
+      
+      logger.error({ 
+        error, 
+        errorMessage, 
+        userSession: currentSession, 
+        address,
+        userId: ctx.from?.id 
+      }, 'Error creating shift order');
+      
       if (error instanceof SideShiftError) {
         await ctx.reply(
-          `❌ *Error creating order*\n\n${error.message}`,
+          `❌ *Error creating order*\n\n${errorMessage}\n\n` +
+          `Please try again or contact support if the issue persists.`,
           { parse_mode: 'Markdown' }
         );
       } else {
-        logger.error({ error }, 'Error handling address input');
-        await ctx.reply('❌ An error occurred. Please try again.');
+        await ctx.reply(
+          `❌ *Error creating order*\n\n${errorMessage}\n\n` +
+          `Please try again or contact support if the issue persists.`,
+          { parse_mode: 'Markdown' }
+        );
       }
     }
   }
