@@ -171,6 +171,195 @@ app.get('/health', rateLimitConfig.health, (_req, res) => {
   res.json(healthData);
 });
 
+// Bot status route - check bot health and configuration
+app.get('/api/bot/status', rateLimitConfig.general, async (_req, res): Promise<void> => {
+  try {
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    
+    if (!botToken) {
+      res.status(400).json({
+        error: 'Telegram bot not configured',
+        bot_enabled: false,
+        webhook_configured: false
+      });
+      return;
+    }
+
+    // Test Telegram API connectivity
+    let botInfo = null;
+    let webhookInfo = null;
+    let apiConnectivity = false;
+    
+    try {
+      const { request } = await import('undici');
+      
+      // Get bot info
+      const botResponse = await request(`https://api.telegram.org/bot${botToken}/getMe`);
+      const botData = await botResponse.body.json() as any;
+      
+      if (botData.ok) {
+        botInfo = botData.result;
+        apiConnectivity = true;
+      }
+      
+      // Get webhook info
+      const webhookResponse = await request(`https://api.telegram.org/bot${botToken}/getWebhookInfo`);
+      const webhookData = await webhookResponse.body.json() as any;
+      
+      if (webhookData.ok) {
+        webhookInfo = webhookData.result;
+      }
+    } catch (error) {
+      logger.error({ error }, 'Failed to connect to Telegram API');
+    }
+
+    const webhookUrl = process.env.APP_BASE_URL && process.env.TELEGRAM_WEBHOOK_SECRET 
+      ? `${process.env.APP_BASE_URL}/webhook/telegram/${process.env.TELEGRAM_WEBHOOK_SECRET}`
+      : null;
+
+    const status = {
+      bot_enabled: !!telegramBotService,
+      bot_running: telegramBotService ? true : false,
+      api_connectivity: apiConnectivity,
+      bot_info: botInfo,
+      webhook: {
+        configured: !!process.env.TELEGRAM_WEBHOOK_SECRET,
+        url: webhookUrl,
+        active: webhookInfo?.url === webhookUrl,
+        info: webhookInfo,
+        pending_update_count: webhookInfo?.pending_update_count || 0
+      },
+      environment: {
+        node_env: process.env.NODE_ENV,
+        base_url: process.env.APP_BASE_URL,
+        admin_chat_id: !!process.env.TELEGRAM_ADMIN_CHAT_ID
+      },
+      health: {
+        uptime: process.uptime(),
+        memory: process.memoryUsage(),
+        timestamp: new Date().toISOString()
+      }
+    };
+
+    logger.info(status, 'Bot status requested');
+    res.json(status);
+  } catch (error) {
+    logger.error({ error }, 'Error getting bot status');
+    res.status(500).json({
+      error: 'Failed to get bot status',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Bot test route - comprehensive testing
+app.get('/api/bot/test', rateLimitConfig.general, async (_req, res): Promise<void> => {
+  try {
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    const adminChatId = process.env.TELEGRAM_ADMIN_CHAT_ID;
+    
+    if (!botToken) {
+      res.status(400).json({
+        error: 'TELEGRAM_BOT_TOKEN not configured',
+        tests: {
+          bot_token: false,
+          admin_chat: false,
+          api_connectivity: false,
+          webhook_delivery: false
+        }
+      });
+      return;
+    }
+
+    const tests = {
+      bot_token: !!botToken,
+      admin_chat: !!adminChatId,
+      api_connectivity: false,
+      webhook_delivery: false,
+      message_sent: false
+    };
+
+    let testResults = {
+      success: false,
+      tests,
+      details: {} as any
+    };
+
+    try {
+      const { request } = await import('undici');
+      
+      // Test 1: API Connectivity
+      const botResponse = await request(`https://api.telegram.org/bot${botToken}/getMe`);
+      const botData = await botResponse.body.json() as any;
+      
+      if (botData.ok) {
+        tests.api_connectivity = true;
+        testResults.details.bot_info = botData.result;
+      }
+
+      // Test 2: Webhook Status
+      const webhookResponse = await request(`https://api.telegram.org/bot${botToken}/getWebhookInfo`);
+      const webhookData = await webhookResponse.body.json() as any;
+      
+      if (webhookData.ok) {
+        tests.webhook_delivery = true;
+        testResults.details.webhook_info = webhookData.result;
+      }
+
+      // Test 3: Send test message (if admin chat is configured)
+      if (adminChatId && tests.api_connectivity) {
+        const testMessage = `🧪 *Bot Test* - ${new Date().toISOString()}\n\n` +
+          `✅ Bot is responding correctly\n` +
+          `🔗 API connectivity: Working\n` +
+          `📡 Webhook: ${tests.webhook_delivery ? 'Configured' : 'Not configured'}\n` +
+          `🖥️ Server: ${process.env.APP_BASE_URL || 'localhost'}\n\n` +
+          `This test message verifies the bot is functioning properly.`;
+        
+        const messageResponse = await request(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: adminChatId,
+            text: testMessage,
+            parse_mode: 'Markdown'
+          })
+        });
+
+        const messageData = await messageResponse.body.json() as any;
+        
+        if (messageData.ok) {
+          tests.message_sent = true;
+          testResults.details.test_message = messageData.result;
+        } else {
+          testResults.details.message_error = messageData.description;
+        }
+      }
+
+      testResults.success = tests.bot_token && tests.api_connectivity;
+      
+    } catch (error) {
+      testResults.details.error = error instanceof Error ? error.message : 'Unknown error';
+      logger.error({ error }, 'Bot test failed');
+    }
+
+    const responseStatus = testResults.success ? 200 : 500;
+    logger.info({ testResults }, 'Bot test completed');
+    
+    res.status(responseStatus).json({
+      message: testResults.success ? 'Bot tests completed successfully' : 'Some bot tests failed',
+      timestamp: new Date().toISOString(),
+      ...testResults
+    });
+    
+  } catch (error) {
+    logger.error({ error }, 'Error running bot tests');
+    res.status(500).json({
+      error: 'Failed to run bot tests',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 // API routes
 app.use('/api', sideshiftRoutes);
 app.use('/api/telegram', telegramRoutes);
