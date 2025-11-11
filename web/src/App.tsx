@@ -1,9 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "react-hot-toast";
 import { Route, BrowserRouter as Router, Routes } from "react-router-dom";
+import FeaturesShowcase from "./components/FeaturesShowcase";
 import Footer from "./components/Footer";
 import Hero from "./components/Hero";
 import HowItWorks from "./components/HowItWorks";
+import Navigation from "./components/Navigation";
 import OrderTracker from "./components/OrderTracker";
 import SupportedChains from "./components/SupportedChains";
 import SwapInterface from "./components/SwapInterface";
@@ -27,6 +29,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <Router>
+        <Navigation />
         <div className="min-h-screen bg-black text-white">
           <Toaster
             position="top-right"
@@ -57,6 +60,7 @@ function App() {
               element={
                 <>
                   <Hero />
+                  <FeaturesShowcase />
                   <HowItWorks />
                   <SupportedChains />
                   <SwapInterface />
