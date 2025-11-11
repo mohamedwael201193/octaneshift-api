@@ -1397,9 +1397,65 @@ export class TelegramBotService {
       }
 
       const page = parseInt(parts[2]);
-      const context = parts[3]; // e.g., "base_0.01"
+      const context = parts[3]; // e.g., "base_0.01" OR "fixed" OR "variable"
 
-      // Get all coins and paginate
+      // Check if this is a shift flow (context is "fixed" or "variable")
+      const isShiftFlow = context === "fixed" || context === "variable";
+
+      if (isShiftFlow) {
+        // Show paginated coins for shift deposit selection
+        const coins = await coinsCache.getAllCoins();
+        const pageSize = 8;
+        const startIdx = page * pageSize;
+        const endIdx = startIdx + pageSize;
+        const pageCoins = coins.slice(startIdx, endIdx);
+
+        const keyboard = pageCoins.map((coin: CoinData) => [
+          {
+            text: `${coin.coin.toUpperCase()} · ${coin.networks.join(", ")}`,
+            callback_data: `deposit:${coin.coin}:${coin.networks[0]}:${context}`,
+          },
+        ]);
+
+        // Add navigation buttons
+        const navButtons = [];
+        if (page > 0) {
+          navButtons.push({
+            text: "⬅️ Previous",
+            callback_data: `page:deposit:${page - 1}:${context}`,
+          });
+        }
+        if (endIdx < coins.length) {
+          navButtons.push({
+            text: "Next ➡️",
+            callback_data: `page:deposit:${page + 1}:${context}`,
+          });
+        }
+
+        if (navButtons.length > 0) {
+          keyboard.push(navButtons);
+        }
+
+        keyboard.push([
+          { text: "🔍 Search", callback_data: `search:deposit:${context}` },
+          { text: "❌ Cancel", callback_data: "cancel" },
+        ]);
+
+        await ctx.editMessageText(
+          `📋 *Browse All Coins* (Page ${page + 1}/${Math.ceil(
+            coins.length / pageSize
+          )})\n\n` +
+            `Choose a coin/network combination to deposit.\n` +
+            `🏷️ indicates memo/tag required.`,
+          {
+            parse_mode: "Markdown",
+            reply_markup: { inline_keyboard: keyboard },
+          }
+        );
+        return;
+      }
+
+      // Handle topup flow (existing logic)
       const allCoins = uiHelpers.getAllCoinOptions();
       const pagination = uiHelpers.paginate(allCoins, page, 6);
       const keyboard = uiHelpers.buildPaginatedKeyboard(
@@ -1429,9 +1485,67 @@ export class TelegramBotService {
         return;
       }
 
-      const context = parts[2]; // e.g., "base_0.01"
+      const context = parts[2]; // e.g., "base_0.01" OR "fixed" OR "variable"
 
-      // Get all coins and show first page
+      // Check if this is a shift flow (context is "fixed" or "variable")
+      const isShiftFlow = context === "fixed" || context === "variable";
+
+      if (isShiftFlow) {
+        // Get user session to retrieve settle coin info
+        const userId = ctx.from?.id;
+        if (!userId) {
+          await ctx.reply("❌ Unable to identify user.");
+          return;
+        }
+
+        const session = userSessions.get(userId);
+        if (!session || !session.settleCoin || !session.settleNetwork) {
+          await ctx.reply(
+            "❌ Session expired. Please start over with /createshift"
+          );
+          return;
+        }
+
+        // Show all coins for deposit selection
+        const coins = await coinsCache.getAllCoins();
+        const pageSize = 8;
+        const pageCoins = coins.slice(0, pageSize);
+
+        const keyboard = pageCoins.map((coin: CoinData) => [
+          {
+            text: `${coin.coin.toUpperCase()} · ${coin.networks.join(", ")}`,
+            callback_data: `deposit:${coin.coin}:${coin.networks[0]}:${context}`,
+          },
+        ]);
+
+        // Add navigation if more pages
+        if (coins.length > pageSize) {
+          keyboard.push([
+            {
+              text: "Next ➡️",
+              callback_data: `page:deposit:1:${context}`,
+            },
+          ]);
+        }
+
+        keyboard.push([
+          { text: "🔍 Search", callback_data: `search:deposit:${context}` },
+          { text: "❌ Cancel", callback_data: "cancel" },
+        ]);
+
+        await ctx.editMessageText(
+          `📋 *Browse All Coins* (${coins.length} total)\n\n` +
+            `Choose a coin/network combination to deposit.\n` +
+            `🏷️ indicates memo/tag required.`,
+          {
+            parse_mode: "Markdown",
+            reply_markup: { inline_keyboard: keyboard },
+          }
+        );
+        return;
+      }
+
+      // Handle topup flow (existing logic)
       const allCoins = uiHelpers.getAllCoinOptions();
       const pagination = uiHelpers.paginate(allCoins, 0, 6);
       const keyboard = uiHelpers.buildPaginatedKeyboard(
