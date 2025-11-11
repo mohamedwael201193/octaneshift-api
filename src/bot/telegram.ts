@@ -1182,8 +1182,8 @@ export class TelegramBotService {
             inline_keyboard: [
               [
                 {
-                  text: "💵 USDC (Mainnet)",
-                  callback_data: `deposit:usdc:mainnet:${shiftType}`,
+                  text: "💵 USDC (Ethereum)",
+                  callback_data: `deposit:usdc:ethereum:${shiftType}`,
                 },
               ],
               [
@@ -2069,6 +2069,20 @@ export class TelegramBotService {
             });
           }
         } catch (shiftError: any) {
+          console.error("🔥 SHIFT CREATION ERROR:", {
+            error: shiftError,
+            message: shiftError?.message,
+            response: shiftError?.response?.data,
+            status: shiftError?.response?.status,
+            stack: shiftError?.stack,
+            depositCoin: session.depositCoin,
+            depositNetwork: session.depositNetwork,
+            settleCoin: session.settleCoin,
+            settleNetwork: session.settleNetwork,
+            settleAddress: address,
+            fullError: JSON.stringify(shiftError, null, 2),
+          });
+
           logger.error(
             {
               error: shiftError,
@@ -2085,8 +2099,13 @@ export class TelegramBotService {
           );
 
           const errorMsg = extractErrorMessage(shiftError);
+          console.log("📝 Extracted error message:", errorMsg);
+
           await ctx.reply(
             `❌ *Error creating shift*\n\n${errorMsg}\n\n` +
+              `Debug: ${
+                shiftError?.message || shiftError?.toString() || "Unknown error"
+              }\n\n` +
               `Please try again or contact support if the issue persists.`,
             { parse_mode: "Markdown" }
           );
