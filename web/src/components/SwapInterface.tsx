@@ -48,12 +48,27 @@ export default function SwapInterface({
   const {
     data: quote,
     isLoading: quoteLoading,
+    error: quoteError,
     refetch: refetchQuote,
   } = useQuery({
     queryKey: ["quote", fromToken, toChain, amount],
-    queryFn: () => octaneAPI.getQuote(fromToken, toChain, amount),
+    queryFn: async () => {
+      try {
+        return await octaneAPI.getQuote(fromToken, toChain, amount);
+      } catch (error: any) {
+        // Log error but don't show toast during auto-fetch
+        console.error(
+          "Failed to fetch quote:",
+          error.response?.status,
+          error.message
+        );
+        throw error;
+      }
+    },
     enabled: !!fromToken && !!toChain && !!amount && parseFloat(amount) > 0,
-    retry: false,
+    retry: 1,
+    retryDelay: 1000,
+    refetchOnWindowFocus: false,
   });
 
   const handleGetQuote = async () => {
@@ -194,6 +209,27 @@ export default function SwapInterface({
               ))}
             </select>
           </div>
+
+          {quoteError && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-red-500/10 border border-red-500/30 rounded-xl p-5 mb-6"
+            >
+              <h3 className="font-bold text-red-400 mb-2">⚠️ Quote Error</h3>
+              <p className="text-sm text-gray-300 mb-3">
+                {(quoteError as any)?.response?.status === 451
+                  ? "Service not available in your region. Please try using a VPN or contact support."
+                  : "Unable to fetch quote. The backend API may be starting up (this can take 1-2 minutes on free tier). Please try again."}
+              </p>
+              <button
+                onClick={() => refetchQuote()}
+                className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded-lg text-red-300 text-sm transition-all"
+              >
+                Retry
+              </button>
+            </motion.div>
+          )}
 
           {quote?.data && (
             <motion.div
