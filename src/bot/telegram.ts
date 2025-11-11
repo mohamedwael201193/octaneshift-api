@@ -2027,12 +2027,16 @@ export class TelegramBotService {
         try {
           if (session.shiftType === "fixed") {
             // For fixed shifts, we need to get a quote first
+            // Use a default settle amount for the quote (user will deposit the calculated amount)
+            const defaultSettleAmount = "0.1"; // Default to 0.1 of settle coin
+
             logger.info(
               {
                 depositCoin: session.depositCoin,
                 depositNetwork: session.depositNetwork,
                 settleCoin: session.settleCoin,
                 settleNetwork: session.settleNetwork,
+                settleAmount: defaultSettleAmount,
               },
               "Requesting fixed quote"
             );
@@ -2042,6 +2046,7 @@ export class TelegramBotService {
               depositNetwork: session.depositNetwork,
               settleCoin: session.settleCoin,
               settleNetwork: session.settleNetwork,
+              settleAmount: defaultSettleAmount,
               affiliateId: process.env.SIDESHIFT_AFFILIATE_ID,
             });
 
