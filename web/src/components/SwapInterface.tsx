@@ -1,0 +1,305 @@
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { motion } from 'framer-motion';
+import toast from 'react-hot-toast';
+import { FaArrowDown, FaSpinner } from 'react-icons/fa';
+import octaneAPI from '../services/api';
+import { SUPPORTED_CHAINS, DEPOSIT_TOKENS } from '../config/chains';
+
+interface OrderDetails {
+  shiftId: string;
+  depositAddress: string;
+  depositAmount: string;
+  depositCoin: string;
+}
+
+export default function SwapInterface() {
+  const [fromToken, setFromToken] = useState('usdt-ethereum');
+  const [toChain, setToChain] = useState('eth-base');
+  const [amount, setAmount] = useState('10');
+  const [settleAddress, setSettleAddress] = useState('');
+  const [isCreatingShift, setIsCreatingShift] = useState(false);
+  const [orderDetails, setOrderDetails] = useState<OrderDetails | null>(null);
+
+  const { data: quote, isLoading: quoteLoading, refetch: refetchQuote } = useQuery({
+    queryKey: ['quote', fromToken, toChain, amount],
+    queryFn: () => octaneAPI.getQuote(fromToken, toChain, amount),
+    enabled: !!fromToken && !!toChain && !!amount && parseFloat(amount) > 0,
+    retry: false
+  });
+
+  const handleGetQuote = async () => {
+    if (!amount || parseFloat(amount) <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+    await refetchQuote();
+    toast.success('Quote updated!');
+  };
+
+  const handleCreateShift = async () => {
+    if (!settleAddress) {
+      toast.error('Please enter your wallet address');
+      return;
+    }
+
+    if (!quote?.data) {
+      toast.error('Please get a quote first');
+      return;
+    }
+
+    setIsCreatingShift(true);
+
+    try {
+      const [depositCoin, depositNetwork] = fromToken.split('-');
+      const [settleCoin, settleNetwork] = toChain.split('-');
+
+      const shiftData = {
+        depositCoin: depositCoin.toUpperCase(),
+        depositNetwork,
+        settleCoin: settleCoin.toUpperCase(),
+        settleNetwork,
+        settleAddress
+      };
+
+      const result = await octaneAPI.createShift(shiftData);
+      const shift = result.data;
+
+      setOrderDetails({
+        shiftId: shift.id,
+        depositAddress: shift.depositAddress,
+        depositAmount: amount,
+        depositCoin: depositCoin.toUpperCase()
+      });
+
+      toast.success('Order created successfully!');
+
+      setTimeout(() => {
+        document.getElementById('order-details')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 100);
+
+    } catch (error: any) {
+      console.error(error);
+    } finally {
+      setIsCreatingShift(false);
+    }
+  };
+
+  return (
+    <div id="swap-section" className="py-24 px-4 bg-gradient-to-b from-black to-gray-900">
+      <div className="max-w-2xl mx-auto">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="text-center mb-12"
+        >
+          <h2 className="text-5xl font-bold mb-4 bg-gradient-to-r from-green-400 to-purple-500 text-transparent bg-clip-text">
+            Start Swapping
+          </h2>
+          <p className="text-xl text-gray-400">Get gas tokens in minutes</p>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          whileInView={{ opacity: 1, scale: 1 }}
+          viewport={{ once: true }}
+          className="bg-gray-800/50 backdrop-blur-xl rounded-3xl p-8 border border-gray-700 shadow-2xl"
+        >
+          <div className="mb-6">
+            <label className="block text-sm font-semibold mb-3 text-gray-300">From</label>
+            <select
+              value={fromToken}
+              onChange={(e) => setFromToken(e.target.value)}
+              className="w-full bg-gray-900/70 border border-gray-600 rounded-xl px-4 py-4 text-white focus:outline-none focus:ring-2 focus:ring-green-500 transition-all"
+            >
+              {DEPOSIT_TOKENS.map(token =>
+                token.networks.map(network => (
+                  <option key={`${token.symbol}-${network}`} value={`${token.symbol.toLowerCase()}-${network}`}>
+                    {token.symbol} on {network.charAt(0).toUpperCase() + network.slice(1)}
+                  </option>
+                ))
+              )}
+            </select>
+            <input
+              type="number"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="Amount"
+              className="w-full mt-3 bg-gray-900/70 border border-gray-600 rounded-xl px-4 py-4 text-white text-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition-all"
+            />
+          </div>
+
+          <div className="flex justify-center my-6">
+            <motion.div
+              animate={{ y: [0, 5, 0] }}
+              transition={{ duration: 1.5, repeat: Infinity }}
+              className="w-12 h-12 rounded-full bg-gradient-to-br from-green-500 to-purple-500 flex items-center justify-center"
+            >
+              <FaArrowDown className="text-2xl text-white" />
+            </motion.div>
+          </div>
+
+          <div className="mb-6">
+            <label className="block text-sm font-semibold mb-3 text-gray-300">To</label>
+            <select
+              value={toChain}
+              onChange={(e) => setToChain(e.target.value)}
+              className="w-full bg-gray-900/70 border border-gray-600 rounded-xl px-4 py-4 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
+            >
+              {SUPPORTED_CHAINS.map(chain => (
+                <option key={chain.apiCode} value={chain.apiCode}>
+                  {chain.symbol} on {chain.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {quote?.data && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-gradient-to-br from-green-500/10 to-purple-500/10 border border-green-500/30 rounded-xl p-5 mb-6"
+            >
+              <h3 className="font-bold text-green-400 mb-3">Quote Details</h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Rate:</span>
+                  <span className="text-white font-semibold">{quote.data.rate || 'Variable'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Min:</span>
+                  <span className="text-white font-semibold">{quote.data.min}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Max:</span>
+                  <span className="text-white font-semibold">{quote.data.max}</span>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          <div className="mb-6">
+            <label className="block text-sm font-semibold mb-3 text-gray-300">Your Wallet Address</label>
+            <input
+              type="text"
+              value={settleAddress}
+              onChange={(e) => setSettleAddress(e.target.value)}
+              placeholder="0x..."
+              className="w-full bg-gray-900/70 border border-gray-600 rounded-xl px-4 py-4 text-white font-mono focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
+            />
+          </div>
+
+          <div className="flex gap-4">
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={handleGetQuote}
+              disabled={quoteLoading || orderDetails !== null}
+              className="flex-1 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-4 px-6 rounded-xl transition-all shadow-lg hover:shadow-purple-500/50 flex items-center justify-center gap-2"
+            >
+              {quoteLoading && <FaSpinner className="animate-spin" />}
+              {orderDetails ? 'Order Active' : quoteLoading ? 'Loading...' : 'Get Quote'}
+            </motion.button>
+
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={handleCreateShift}
+              disabled={!quote?.data || !settleAddress || isCreatingShift || orderDetails !== null}
+              className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-4 px-6 rounded-xl transition-all shadow-lg hover:shadow-green-500/50 flex items-center justify-center gap-2"
+            >
+              {isCreatingShift && <FaSpinner className="animate-spin" />}
+              {orderDetails ? 'Order Active' : isCreatingShift ? 'Creating...' : 'Create Order'}
+            </motion.button>
+          </div>
+
+          {orderDetails && (
+            <motion.div
+              id="order-details"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-6 p-6 bg-green-900/20 border border-green-500/50 rounded-2xl"
+            >
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold text-green-400">✅ Order Created Successfully!</h3>
+                <button
+                  onClick={() => setOrderDetails(null)}
+                  className="text-gray-400 hover:text-white text-xl w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-700 transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="mb-4 p-3 bg-gray-900/50 rounded-lg">
+                <p className="text-sm text-gray-400 mb-1">Shift ID (for tracking):</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <code className="text-green-400 font-mono text-sm break-all">{orderDetails.shiftId}</code>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(orderDetails.shiftId);
+                      toast.success('Shift ID copied!');
+                    }}
+                    className="px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 rounded transition-colors whitespace-nowrap"
+                  >
+                    Copy
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-4 bg-gray-900/50 rounded-lg mb-4">
+                <p className="text-sm text-gray-400 mb-3">
+                  Send exactly <span className="text-white font-bold">{orderDetails.depositAmount} {orderDetails.depositCoin}</span> to:
+                </p>
+                <div className="bg-gray-800 p-3 rounded-lg mb-3">
+                  <code className="text-sm font-mono text-blue-400 break-all block">
+                    {orderDetails.depositAddress}
+                  </code>
+                </div>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(orderDetails.depositAddress);
+                    toast.success('Address copied!');
+                  }}
+                  className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors"
+                >
+                  📋 Copy Deposit Address
+                </button>
+              </div>
+
+              <div className="flex gap-3 mb-4">
+                <button
+                  onClick={() => {
+                    const trackerSection = document.getElementById('tracker-section');
+                    if (trackerSection) {
+                      trackerSection.scrollIntoView({ behavior: 'smooth' });
+                    }
+                  }}
+                  className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-medium transition-colors"
+                >
+                  🔍 Track Order
+                </button>
+                <button
+                  onClick={() => {
+                    setOrderDetails(null);
+                    setSettleAddress('');
+                    setAmount('10');
+                  }}
+                  className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg font-medium transition-colors"
+                >
+                  🔄 New Order
+                </button>
+              </div>
+
+              <div className="p-3 bg-yellow-900/20 border border-yellow-500/30 rounded-lg">
+                <p className="text-xs text-yellow-400">
+                  ⏱️ Please send funds within 10 minutes. You can track the status anytime using the Shift ID.
+                </p>
+              </div>
+            </motion.div>
+          )}
+        </motion.div>
+      </div>
+    </div>
+  );
+}

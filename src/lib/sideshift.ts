@@ -1,15 +1,15 @@
-import { request } from 'undici';
-import { z } from 'zod';
-import { maskIp } from '../middleware/compliance';
-import { logger } from '../utils/logger';
+import { request } from "undici";
+import { z } from "zod";
+import { maskIp } from "../middleware/compliance";
+import { logger } from "../utils/logger";
 
-const SIDESHIFT_API_BASE = 'https://sideshift.ai/api/v2';
+const SIDESHIFT_API_BASE = "https://sideshift.ai/api/v2";
 
 // Zod schemas for SideShift API responses
 export const PermissionSchema = z.object({
   createShift: z.boolean(),
   affiliate: z.boolean().optional(),
-  requestQuote: z.boolean().optional()
+  requestQuote: z.boolean().optional(),
 });
 
 export const NetworkSchema = z.object({
@@ -20,13 +20,13 @@ export const NetworkSchema = z.object({
   variableOnly: z.boolean().optional(),
   depositOffline: z.boolean().optional(),
   settleOffline: z.boolean().optional(),
-  hasMemo: z.boolean().optional()
+  hasMemo: z.boolean().optional(),
 });
 
 export const PairRequestSchema = z.object({
   from: z.string(),
   to: z.string(),
-  amount: z.string().optional()
+  amount: z.string().optional(),
 });
 
 export const PairSchema = z.object({
@@ -36,7 +36,7 @@ export const PairSchema = z.object({
   depositCoin: z.string(),
   settleCoin: z.string(),
   depositNetwork: z.string(),
-  settleNetwork: z.string()
+  settleNetwork: z.string(),
 });
 
 export const CreateVariableShiftRequestSchema = z.object({
@@ -47,7 +47,40 @@ export const CreateVariableShiftRequestSchema = z.object({
   settleAddress: z.string(),
   refundAddress: z.string().optional(),
   affiliateId: z.string().optional(),
-  commissionRate: z.number().optional()
+  commissionRate: z.number().optional(),
+});
+
+export const FixedQuoteRequestSchema = z.object({
+  depositCoin: z.string(),
+  depositNetwork: z.string(),
+  settleCoin: z.string(),
+  settleNetwork: z.string(),
+  depositAmount: z.string().optional(),
+  settleAmount: z.string().optional(),
+  affiliateId: z.string().optional(),
+  commissionRate: z.number().optional(),
+});
+
+export const FixedQuoteSchema = z.object({
+  id: z.string(),
+  createdAt: z.string(),
+  depositCoin: z.string(),
+  depositNetwork: z.string(),
+  settleCoin: z.string(),
+  settleNetwork: z.string(),
+  expiresAt: z.string(),
+  depositAmount: z.string(),
+  settleAmount: z.string(),
+  rate: z.string(),
+  affiliateId: z.string().optional(),
+  commissionRate: z.number().optional(),
+});
+
+export const CreateFixedShiftRequestSchema = z.object({
+  quoteId: z.string(),
+  settleAddress: z.string(),
+  refundAddress: z.string().optional(),
+  affiliateId: z.string().optional(),
 });
 
 export const ShiftSchema = z.object({
@@ -62,18 +95,34 @@ export const ShiftSchema = z.object({
   depositMin: z.string(),
   depositMax: z.string(),
   expiresAt: z.string(),
-  status: z.enum(['waiting', 'pending', 'processing', 'settled', 'refunding', 'refunded']),
+  status: z.enum([
+    "waiting",
+    "pending",
+    "processing",
+    "settled",
+    "refunding",
+    "refunded",
+  ]),
+  type: z.enum(["variable", "fixed"]).optional(),
+  rate: z.string().optional(),
   depositMemo: z.string().optional(),
   settleMemo: z.string().optional(),
   depositAmount: z.string().optional(),
-  settleAmount: z.string().optional()
+  settleAmount: z.string().optional(),
 });
 
 export type Permission = z.infer<typeof PermissionSchema>;
 export type Network = z.infer<typeof NetworkSchema>;
 export type PairRequest = z.infer<typeof PairRequestSchema>;
 export type Pair = z.infer<typeof PairSchema>;
-export type CreateVariableShiftRequest = z.infer<typeof CreateVariableShiftRequestSchema>;
+export type CreateVariableShiftRequest = z.infer<
+  typeof CreateVariableShiftRequestSchema
+>;
+export type FixedQuoteRequest = z.infer<typeof FixedQuoteRequestSchema>;
+export type FixedQuote = z.infer<typeof FixedQuoteSchema>;
+export type CreateFixedShiftRequest = z.infer<
+  typeof CreateFixedShiftRequestSchema
+>;
 export type Shift = z.infer<typeof ShiftSchema>;
 
 export class SideShiftError extends Error {
@@ -84,7 +133,7 @@ export class SideShiftError extends Error {
     public details?: any
   ) {
     super(message);
-    this.name = 'SideShiftError';
+    this.name = "SideShiftError";
   }
 }
 
@@ -94,11 +143,13 @@ export class SideShiftClient {
   private affiliateId?: string;
   private commissionRate: number;
 
-  constructor(options: { 
-    secret?: string;
-    affiliateId?: string;
-    commissionRate?: number;
-  } = {}) {
+  constructor(
+    options: {
+      secret?: string;
+      affiliateId?: string;
+      commissionRate?: number;
+    } = {}
+  ) {
     this.baseURL = SIDESHIFT_API_BASE;
     this.secret = options.secret ?? undefined;
     this.affiliateId = options.affiliateId ?? undefined;
@@ -108,40 +159,43 @@ export class SideShiftClient {
   private async makeRequest<T>(
     path: string,
     options: {
-      method?: 'GET' | 'POST';
+      method?: "GET" | "POST";
       body?: any;
       headers?: Record<string, string>;
       userIp?: string;
     } = {}
   ): Promise<T> {
     const url = `${this.baseURL}${path}`;
-    const { method = 'GET', body, headers = {}, userIp } = options;
+    const { method = "GET", body, headers = {}, userIp } = options;
 
     try {
-      logger.debug({ url, method, userIp: userIp ? maskIp(userIp) : undefined }, 'Making SideShift API request');
+      logger.debug(
+        { url, method, userIp: userIp ? maskIp(userIp) : undefined },
+        "Making SideShift API request"
+      );
 
       const requestHeaders: Record<string, string> = {
-        'Content-Type': 'application/json',
-        'User-Agent': 'OctaneShift/1.0',
-        ...headers
+        "Content-Type": "application/json",
+        "User-Agent": "OctaneShift/1.0",
+        ...headers,
       };
 
       // Add secret header if available
       if (this.secret) {
-        requestHeaders['x-sideshift-secret'] = this.secret;
+        requestHeaders["x-sideshift-secret"] = this.secret;
       }
 
       // Add user IP header if provided
       if (userIp) {
-        requestHeaders['x-user-ip'] = userIp;
+        requestHeaders["x-user-ip"] = userIp;
       }
 
       const requestOptions: any = {
         method,
-        headers: requestHeaders
+        headers: requestHeaders,
       };
 
-      if (body && method === 'POST') {
+      if (body && method === "POST") {
         requestOptions.body = JSON.stringify(body);
       }
 
@@ -149,12 +203,15 @@ export class SideShiftClient {
       const responseBody = await response.body.text();
 
       if (!response.statusCode || response.statusCode >= 400) {
-        logger.error({
-          url,
-          status: response.statusCode,
-          response: responseBody,
-          userIp: userIp ? maskIp(userIp) : undefined
-        }, 'SideShift API error response');
+        logger.error(
+          {
+            url,
+            status: response.statusCode,
+            response: responseBody,
+            userIp: userIp ? maskIp(userIp) : undefined,
+          },
+          "SideShift API error response"
+        );
 
         let errorDetails;
         try {
@@ -164,52 +221,65 @@ export class SideShiftClient {
         }
 
         // Map common HTTP status codes to meaningful error codes
-        const errorCode = this.mapErrorCode(response.statusCode || 500, errorDetails);
+        const errorCode = this.mapErrorCode(
+          response.statusCode || 500,
+          errorDetails
+        );
 
         throw new SideShiftError(
           response.statusCode || 500,
-          errorDetails.message || errorDetails.error || 'Unknown error',
+          errorDetails.message || errorDetails.error || "Unknown error",
           errorCode,
           errorDetails
         );
       }
 
       const data = JSON.parse(responseBody);
-      logger.debug({ url, status: response.statusCode, userIp: userIp ? maskIp(userIp) : undefined }, 'SideShift API request successful');
-      
+      logger.debug(
+        {
+          url,
+          status: response.statusCode,
+          userIp: userIp ? maskIp(userIp) : undefined,
+        },
+        "SideShift API request successful"
+      );
+
       return data;
     } catch (error) {
       if (error instanceof SideShiftError) {
         throw error;
       }
 
-      logger.error({ error, url, userIp: userIp ? maskIp(userIp) : undefined }, 'SideShift API request failed');
-      throw new SideShiftError(500, 'Network error', 'NETWORK_ERROR');
+      logger.error(
+        { error, url, userIp: userIp ? maskIp(userIp) : undefined },
+        "SideShift API request failed"
+      );
+      throw new SideShiftError(500, "Network error", "NETWORK_ERROR");
     }
   }
 
   private mapErrorCode(status: number, _errorDetails: any): string {
     switch (status) {
       case 400:
-        return 'INVALID_REQUEST';
+        return "INVALID_REQUEST";
       case 401:
-        return 'UNAUTHORIZED';
+        return "UNAUTHORIZED";
       case 403:
-        return 'FORBIDDEN';
+        return "FORBIDDEN";
       case 404:
-        return 'NOT_FOUND';
+        return "NOT_FOUND";
       case 422:
-        return 'VALIDATION_ERROR';
+        return "VALIDATION_ERROR";
       case 429:
-        return 'RATE_LIMITED';
+        return "RATE_LIMITED";
       case 500:
-        return 'INTERNAL_ERROR';
+        return "INTERNAL_ERROR";
       case 502:
       case 503:
       case 504:
-        return 'SERVICE_UNAVAILABLE';
+        return "SERVICE_UNAVAILABLE";
       default:
-        return 'UNKNOWN_ERROR';
+        return "UNKNOWN_ERROR";
     }
   }
 
@@ -221,7 +291,10 @@ export class SideShiftClient {
     if (userIp) {
       requestOptions.userIp = userIp;
     }
-    const data = await this.makeRequest<Permission>('/permissions', requestOptions);
+    const data = await this.makeRequest<Permission>(
+      "/permissions",
+      requestOptions
+    );
     return PermissionSchema.parse(data);
   }
 
@@ -231,18 +304,20 @@ export class SideShiftClient {
   async getPair(params: PairRequest): Promise<Pair> {
     const queryParams = new URLSearchParams();
     if (params.amount) {
-      queryParams.append('amount', params.amount);
+      queryParams.append("amount", params.amount);
     }
     if (this.affiliateId) {
-      queryParams.append('affiliateId', this.affiliateId);
+      queryParams.append("affiliateId", this.affiliateId);
     }
     if (this.commissionRate) {
-      queryParams.append('commissionRate', this.commissionRate.toString());
+      queryParams.append("commissionRate", this.commissionRate.toString());
     }
 
     const queryString = queryParams.toString();
-    const endpoint = `/pair/${params.from}/${params.to}${queryString ? `?${queryString}` : ''}`;
-    
+    const endpoint = `/pair/${params.from}/${params.to}${
+      queryString ? `?${queryString}` : ""
+    }`;
+
     const data = await this.makeRequest<Pair>(endpoint);
     return PairSchema.parse(data);
   }
@@ -257,20 +332,26 @@ export class SideShiftClient {
     const body = {
       ...request,
       affiliateId: request.affiliateId || this.affiliateId,
-      commissionRate: request.commissionRate !== undefined ? request.commissionRate : this.commissionRate
+      commissionRate:
+        request.commissionRate !== undefined
+          ? request.commissionRate
+          : this.commissionRate,
     };
 
     // Validate request body
     CreateVariableShiftRequestSchema.parse(body);
 
     const requestOptions: any = {
-      method: 'POST',
-      body
+      method: "POST",
+      body,
     };
     if (userIp) {
       requestOptions.userIp = userIp;
     }
-    const data = await this.makeRequest<Shift>('/shifts/variable', requestOptions);
+    const data = await this.makeRequest<Shift>(
+      "/shifts/variable",
+      requestOptions
+    );
 
     return ShiftSchema.parse(data);
   }
@@ -286,13 +367,73 @@ export class SideShiftClient {
     const data = await this.makeRequest<Shift>(`/shifts/${id}`, requestOptions);
     return ShiftSchema.parse(data);
   }
+
+  /**
+   * Request a fixed rate quote
+   */
+  async requestFixedQuote(
+    request: FixedQuoteRequest,
+    userIp?: string
+  ): Promise<FixedQuote> {
+    const body = {
+      ...request,
+      affiliateId: request.affiliateId || this.affiliateId,
+      commissionRate:
+        request.commissionRate !== undefined
+          ? request.commissionRate
+          : this.commissionRate,
+    };
+
+    // Validate request body
+    FixedQuoteRequestSchema.parse(body);
+
+    const requestOptions: any = {
+      method: "POST",
+      body,
+    };
+    if (userIp) {
+      requestOptions.userIp = userIp;
+    }
+    const data = await this.makeRequest<FixedQuote>("/quotes", requestOptions);
+
+    return FixedQuoteSchema.parse(data);
+  }
+
+  /**
+   * Create a fixed shift from a quote
+   */
+  async createFixedShift(
+    request: CreateFixedShiftRequest,
+    userIp?: string
+  ): Promise<Shift> {
+    const body = {
+      ...request,
+      affiliateId: request.affiliateId || this.affiliateId,
+    };
+
+    // Validate request body
+    CreateFixedShiftRequestSchema.parse(body);
+
+    const requestOptions: any = {
+      method: "POST",
+      body,
+    };
+    if (userIp) {
+      requestOptions.userIp = userIp;
+    }
+    const data = await this.makeRequest<Shift>("/shifts/fixed", requestOptions);
+
+    return ShiftSchema.parse(data);
+  }
 }
 
 // Export a default instance
 const sideshift = new SideShiftClient({
   ...(process.env.SIDESHIFT_SECRET && { secret: process.env.SIDESHIFT_SECRET }),
   ...(process.env.AFFILIATE_ID && { affiliateId: process.env.AFFILIATE_ID }),
-  ...(process.env.COMMISSION_RATE && { commissionRate: parseFloat(process.env.COMMISSION_RATE) })
+  ...(process.env.COMMISSION_RATE && {
+    commissionRate: parseFloat(process.env.COMMISSION_RATE),
+  }),
 });
 
 export default sideshift;
