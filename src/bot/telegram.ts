@@ -1673,11 +1673,15 @@ export class TelegramBotService {
         session.step = "awaiting_address";
         userSessions.set(userId, session);
 
-        const fromCoin = `${depositCoin}-${depositNetwork}`;
-        const toCoin = `${settleCoin}-${settleNetwork}`;
-
         logger.info(
-          { userId, fromCoin, toCoin, shiftType },
+          {
+            userId,
+            depositCoin,
+            depositNetwork,
+            settleCoin,
+            settleNetwork,
+            shiftType,
+          },
           "Deposit coin selected, awaiting address"
         );
 
@@ -1872,10 +1876,6 @@ export class TelegramBotService {
           return;
         }
 
-        // Build coin identifiers
-        const fromCoin = `${session.depositCoin}-${session.depositNetwork}`;
-        const toCoin = `${session.settleCoin}-${session.settleNetwork}`;
-
         // Validate address against settle network
         const validationResult = validateAddress(
           address,
@@ -1898,41 +1898,80 @@ export class TelegramBotService {
         logger.info(
           {
             userId,
-            fromCoin,
-            toCoin,
             shiftType: session.shiftType,
             settleAddress: address,
+            depositCoin: session.depositCoin,
+            depositNetwork: session.depositNetwork,
+            settleCoin: session.settleCoin,
+            settleNetwork: session.settleNetwork,
           },
           "Creating shift order"
         );
 
         let shift: Shift;
 
-        if (session.shiftType === "fixed") {
-          // For fixed shifts, we need to get a quote first
-          const quote = await sideshift.requestFixedQuote({
-            depositCoin: fromCoin,
-            depositNetwork: session.depositNetwork,
-            settleCoin: toCoin,
-            settleNetwork: session.settleNetwork,
-            affiliateId: process.env.SIDESHIFT_AFFILIATE_ID,
-          });
+        try {
+          if (session.shiftType === "fixed") {
+            // For fixed shifts, we need to get a quote first
+            logger.info(
+              {
+                depositCoin: session.depositCoin,
+                depositNetwork: session.depositNetwork,
+                settleCoin: session.settleCoin,
+                settleNetwork: session.settleNetwork,
+              },
+              "Requesting fixed quote"
+            );
 
-          shift = await sideshift.createFixedShift({
-            quoteId: quote.id,
-            settleAddress: address,
-            affiliateId: process.env.SIDESHIFT_AFFILIATE_ID,
-          });
-        } else {
-          // Variable shift
-          shift = await sideshift.createVariableShift({
-            depositCoin: fromCoin,
-            depositNetwork: session.depositNetwork,
-            settleCoin: toCoin,
-            settleNetwork: session.settleNetwork,
-            settleAddress: address,
-            affiliateId: process.env.SIDESHIFT_AFFILIATE_ID,
-          });
+            const quote = await sideshift.requestFixedQuote({
+              depositCoin: session.depositCoin,
+              depositNetwork: session.depositNetwork,
+              settleCoin: session.settleCoin,
+              settleNetwork: session.settleNetwork,
+              affiliateId: process.env.SIDESHIFT_AFFILIATE_ID,
+            });
+
+            logger.info({ quoteId: quote.id }, "Fixed quote received");
+
+            shift = await sideshift.createFixedShift({
+              quoteId: quote.id,
+              settleAddress: address,
+              affiliateId: process.env.SIDESHIFT_AFFILIATE_ID,
+            });
+          } else {
+            // Variable shift
+            shift = await sideshift.createVariableShift({
+              depositCoin: session.depositCoin,
+              depositNetwork: session.depositNetwork,
+              settleCoin: session.settleCoin,
+              settleNetwork: session.settleNetwork,
+              settleAddress: address,
+              affiliateId: process.env.SIDESHIFT_AFFILIATE_ID,
+            });
+          }
+        } catch (shiftError: any) {
+          logger.error(
+            {
+              error: shiftError,
+              message: shiftError?.message,
+              response: shiftError?.response?.data,
+              status: shiftError?.response?.status,
+              depositCoin: session.depositCoin,
+              depositNetwork: session.depositNetwork,
+              settleCoin: session.settleCoin,
+              settleNetwork: session.settleNetwork,
+              settleAddress: address,
+            },
+            "Failed to create shift"
+          );
+
+          const errorMsg = extractErrorMessage(shiftError);
+          await ctx.reply(
+            `❌ *Error creating shift*\n\n${errorMsg}\n\n` +
+              `Please try again or contact support if the issue persists.`,
+            { parse_mode: "Markdown" }
+          );
+          return;
         }
 
         // Clear session
