@@ -42,10 +42,12 @@ const CreateGiftSchema = z.object({
 /**
  * POST /api/gifts
  * Create a shareable gas gift link
+ * Note: Authentication is optional for public access
  */
-router.post("/", authenticateToken, async (req: any, res) => {
+router.post("/", async (req: any, res) => {
   try {
-    const userId = req.user!.id;
+    // Support both authenticated and anonymous users
+    const userId = req.user?.id || `anon_${Date.now()}`;
 
     // Validate request
     const validationResult = CreateGiftSchema.safeParse(req.body);

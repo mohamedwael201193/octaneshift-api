@@ -33,8 +33,6 @@ export default function BatchTopUp() {
     { settleAddress: "", settleAmount: "" },
   ]);
   const [chain, setChain] = useState("ethereum");
-  const [depositCoin, setDepositCoin] = useState("usdt");
-  const [depositNetwork, setDepositNetwork] = useState("tron");
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<BatchResult[]>([]);
   const [payoutId, setPayoutId] = useState<string>("");
@@ -107,22 +105,13 @@ export default function BatchTopUp() {
     setResults([]);
 
     try {
-      const token = localStorage.getItem("auth_token");
-      const response = await axios.post(
-        `${API_BASE_URL}/api/topup/batch`,
-        {
-          settleCoin: "eth",
-          settleNetwork: chain,
-          depositCoin,
-          depositNetwork,
-          items: validRecipients,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const response = await axios.post(`${API_BASE_URL}/api/topup/batch`, {
+        items: validRecipients.map((r) => ({
+          chain: chain,
+          settleAddress: r.settleAddress,
+          settleAmount: r.settleAmount,
+        })),
+      });
 
       if (response.data.success) {
         setResults(response.data.data.results);
@@ -132,6 +121,7 @@ export default function BatchTopUp() {
         );
       }
     } catch (err: any) {
+      console.error("Batch error:", err.response?.data);
       toast.error(err.response?.data?.error || "Failed to create batch");
     } finally {
       setLoading(false);
@@ -162,10 +152,10 @@ export default function BatchTopUp() {
           className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 mb-6"
         >
           <h2 className="text-xl font-semibold mb-4">Configuration</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm text-gray-400 mb-2">
-                Settle Network
+                Target Network (Where gas will be sent)
               </label>
               <select
                 value={chain}
@@ -179,33 +169,13 @@ export default function BatchTopUp() {
                 <option value="optimism">Optimism</option>
               </select>
             </div>
-            <div>
-              <label className="block text-sm text-gray-400 mb-2">
-                Deposit Coin
-              </label>
-              <select
-                value={depositCoin}
-                onChange={(e) => setDepositCoin(e.target.value)}
-                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white"
-              >
-                <option value="usdt">USDT</option>
-                <option value="usdc">USDC</option>
-                <option value="dai">DAI</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm text-gray-400 mb-2">
-                Deposit Network
-              </label>
-              <select
-                value={depositNetwork}
-                onChange={(e) => setDepositNetwork(e.target.value)}
-                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white"
-              >
-                <option value="tron">Tron</option>
-                <option value="ethereum">Ethereum</option>
-                <option value="polygon">Polygon</option>
-              </select>
+            <div className="flex items-end">
+              <div className="bg-blue-900/20 border border-blue-700/50 rounded-lg px-4 py-2 w-full">
+                <div className="text-xs text-blue-400 mb-1">Payment Method</div>
+                <div className="text-sm text-white">
+                  You'll pay with USDT/USDC
+                </div>
+              </div>
             </div>
           </div>
         </motion.div>

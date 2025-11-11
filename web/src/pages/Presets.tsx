@@ -11,6 +11,7 @@ interface Preset {
   rationale: string;
   useCase: string;
   icon: string;
+  displayAmount: string;
 }
 
 const presets: Preset[] = [
@@ -23,6 +24,7 @@ const presets: Preset[] = [
     rationale: "Base offers extremely low gas fees (~$0.01-0.05 per tx)",
     useCase: "~20-50 NFT mints",
     icon: "🎨",
+    displayAmount: "5 USDT",
   },
   {
     id: "defi-arbitrum",
@@ -33,6 +35,7 @@ const presets: Preset[] = [
     rationale: "Arbitrum L2 reduces costs by 90% vs Ethereum mainnet",
     useCase: "~10-30 DeFi transactions",
     icon: "💰",
+    displayAmount: "10 USDT",
   },
   {
     id: "gaming-polygon",
@@ -43,6 +46,7 @@ const presets: Preset[] = [
     rationale: "Polygon has ultra-low fees ideal for frequent game actions",
     useCase: "~100-500 game transactions",
     icon: "🎮",
+    displayAmount: "5 USDT",
   },
   {
     id: "social-optimism",
@@ -53,6 +57,7 @@ const presets: Preset[] = [
     rationale: "Optimism powers social dApps with low-cost interactions",
     useCase: "~30-100 social posts",
     icon: "💬",
+    displayAmount: "5 USDT",
   },
   {
     id: "daily-ethereum",
@@ -63,6 +68,7 @@ const presets: Preset[] = [
     rationale: "Standard amount for daily Ethereum transactions",
     useCase: "~5-15 transactions",
     icon: "⚡",
+    displayAmount: "20 USDT",
   },
   {
     id: "trial-any",
@@ -73,6 +79,7 @@ const presets: Preset[] = [
     rationale: "Minimal amount to test wallet and dApps",
     useCase: "~5-10 test transactions",
     icon: "🧪",
+    displayAmount: "5 USDT",
   },
 ];
 
@@ -147,7 +154,7 @@ export default function Presets() {
                   Recommended Amount
                 </div>
                 <div className="text-2xl font-bold text-white">
-                  {preset.amount} ETH
+                  {preset.displayAmount}
                 </div>
               </div>
 
