@@ -2,7 +2,13 @@ import { Request, Response } from "express";
 import { Context, Telegraf } from "telegraf";
 import { Update } from "telegraf/typings/core/types/typegram";
 import { request } from "undici";
-import sideshift, { SideShiftError, type Pair } from "../lib/sideshift";
+import type { CoinData } from "../lib/coinsCache";
+import * as coinsCache from "../lib/coinsCache";
+import sideshift, {
+  SideShiftError,
+  type Pair,
+  type Shift,
+} from "../lib/sideshift";
 import { getExampleAddress, validateAddress } from "../utils/addressValidation";
 import { logger } from "../utils/logger";
 import {
@@ -70,16 +76,27 @@ interface BotContext extends Context {
 
 // User session management for multi-step flows
 interface UserSession {
-  step: "awaiting_deposit_asset" | "awaiting_address" | "awaiting_confirmation";
+  step:
+    | "awaiting_deposit_asset"
+    | "awaiting_address"
+    | "awaiting_confirmation"
+    | "searching_settle"
+    | "searching_deposit";
   targetNetwork?: string;
   targetAmount?: number;
   depositAsset?: string;
   settleAsset?: string;
-  quote?: Pair;
+  quote?: Pair | Shift;
   calculatedDepositAmount?: string;
   calculatedSettleAmount?: string;
   settleAddress?: string;
   timestamp: number;
+  // For Fixed/Variable shift creation
+  shiftType?: "fixed" | "variable";
+  settleCoin?: string;
+  settleNetwork?: string;
+  depositCoin?: string;
+  depositNetwork?: string;
 }
 
 const userSessions = new Map<number, UserSession>();
@@ -397,7 +414,15 @@ export class TelegramBotService {
       const data = callbackQuery.data;
 
       try {
-        if (data.startsWith("deposit:") || data.startsWith("deposit_")) {
+        if (data.startsWith("settle:")) {
+          await this.handleSettleSelection(ctx, data);
+        } else if (data.startsWith("page:settle:")) {
+          await this.handleSettlePagination(ctx, data);
+        } else if (data.startsWith("browse:settle:")) {
+          await this.handleBrowseSettleCoins(ctx, data);
+        } else if (data.startsWith("search:settle:")) {
+          await this.handleSettleCoinSearch(ctx, data);
+        } else if (data.startsWith("deposit:") || data.startsWith("deposit_")) {
           await this.handleDepositSelection(ctx, data);
         } else if (data.startsWith("page:deposit:")) {
           await this.handleDepositPagination(ctx, data);
@@ -413,6 +438,9 @@ export class TelegramBotService {
         } else if (data.startsWith("status_")) {
           const shiftId = data.replace("status_", "");
           await this.handleStatus(ctx, shiftId);
+        } else if (data.startsWith("cancel_shift_")) {
+          const shiftId = data.replace("cancel_shift_", "");
+          await this.handleCancelOrder(ctx, shiftId);
         } else if (data.startsWith("chain_")) {
           const chain = data.replace("chain_", "");
           await ctx.answerCbQuery();
@@ -566,29 +594,39 @@ export class TelegramBotService {
               await ctx.answerCbQuery();
               await ctx.reply(
                 "🔀 *Fixed Shift*\n\n" +
-                  "Select deposit coin for your fixed shift:",
+                  "First, select the coin you want to **receive** (settle coin):",
                 {
                   parse_mode: "Markdown",
                   reply_markup: {
                     inline_keyboard: [
                       [
                         {
-                          text: "💵 USDC",
-                          callback_data: "deposit:usdc:mainnet:fixed",
+                          text: "⛽ ETH (Base)",
+                          callback_data: "settle:eth:base:fixed",
                         },
                         {
-                          text: "💵 USDT",
-                          callback_data: "deposit:usdt:mainnet:fixed",
+                          text: "⛽ ETH (Mainnet)",
+                          callback_data: "settle:eth:mainnet:fixed",
+                        },
+                      ],
+                      [
+                        {
+                          text: "⛽ ETH (Arbitrum)",
+                          callback_data: "settle:eth:arbitrum:fixed",
+                        },
+                        {
+                          text: "⛽ ETH (Optimism)",
+                          callback_data: "settle:eth:optimism:fixed",
                         },
                       ],
                       [
                         {
                           text: "🔍 Search All Coins",
-                          callback_data: "search:deposit:fixed",
+                          callback_data: "search:settle:fixed",
                         },
                         {
                           text: "📄 Browse All",
-                          callback_data: "browse:deposit:fixed",
+                          callback_data: "browse:settle:fixed",
                         },
                       ],
                       [{ text: "🔙 Back", callback_data: "create_shift" }],
@@ -602,29 +640,39 @@ export class TelegramBotService {
               await ctx.answerCbQuery();
               await ctx.reply(
                 "🔄 *Variable Shift*\n\n" +
-                  "Select deposit coin for your variable shift:",
+                  "First, select the coin you want to **receive** (settle coin):",
                 {
                   parse_mode: "Markdown",
                   reply_markup: {
                     inline_keyboard: [
                       [
                         {
-                          text: "💵 USDC",
-                          callback_data: "deposit:usdc:mainnet:variable",
+                          text: "⛽ ETH (Base)",
+                          callback_data: "settle:eth:base:variable",
                         },
                         {
-                          text: "💵 USDT",
-                          callback_data: "deposit:usdt:mainnet:variable",
+                          text: "⛽ ETH (Mainnet)",
+                          callback_data: "settle:eth:mainnet:variable",
+                        },
+                      ],
+                      [
+                        {
+                          text: "⛽ ETH (Arbitrum)",
+                          callback_data: "settle:eth:arbitrum:variable",
+                        },
+                        {
+                          text: "⛽ ETH (Optimism)",
+                          callback_data: "settle:eth:optimism:variable",
                         },
                       ],
                       [
                         {
                           text: "🔍 Search All Coins",
-                          callback_data: "search:deposit:variable",
+                          callback_data: "search:settle:variable",
                         },
                         {
                           text: "📄 Browse All",
-                          callback_data: "browse:deposit:variable",
+                          callback_data: "browse:settle:variable",
                         },
                       ],
                       [{ text: "🔙 Back", callback_data: "create_shift" }],
@@ -1083,6 +1131,257 @@ export class TelegramBotService {
     }
   }
 
+  private async handleSettleSelection(
+    ctx: BotContext,
+    data: string
+  ): Promise<void> {
+    try {
+      await ctx.answerCbQuery();
+
+      const userId = ctx.from?.id;
+      if (!userId) {
+        await ctx.reply("❌ Unable to identify user.");
+        return;
+      }
+
+      // Parse: settle:{coin}:{network}:{type}
+      const parts = data.split(":");
+      if (parts.length !== 4) {
+        await ctx.reply("❌ Invalid selection. Please try again.");
+        return;
+      }
+
+      const [, settleCoin, settleNetwork, shiftType] = parts;
+
+      // Store in session
+      let session = userSessions.get(userId);
+      if (!session) {
+        session = {
+          step: "searching_settle",
+          timestamp: Date.now(),
+        };
+        userSessions.set(userId, session);
+      }
+
+      session.settleCoin = settleCoin;
+      session.settleNetwork = settleNetwork;
+      session.shiftType = shiftType as "fixed" | "variable";
+
+      logger.info(
+        { userId, settleCoin, settleNetwork, shiftType },
+        "Settle coin selected"
+      );
+
+      // Now ask for deposit coin
+      await ctx.reply(
+        `✅ You'll receive: **${settleCoin.toUpperCase()}** on **${settleNetwork}**\n\n` +
+          `Now, select the coin you want to **deposit**:`,
+        {
+          parse_mode: "Markdown",
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: "💵 USDC (Mainnet)",
+                  callback_data: `deposit:usdc:mainnet:${shiftType}`,
+                },
+              ],
+              [
+                {
+                  text: "💵 USDT (Liquid)",
+                  callback_data: `deposit:usdt:liquid:${shiftType}`,
+                },
+              ],
+              [
+                {
+                  text: "🔍 Search All Coins",
+                  callback_data: `search:deposit:${shiftType}`,
+                },
+              ],
+              [
+                {
+                  text: "📄 Browse All",
+                  callback_data: `browse:deposit:${shiftType}`,
+                },
+              ],
+              [{ text: "❌ Cancel", callback_data: "cancel" }],
+            ],
+          },
+        }
+      );
+    } catch (error) {
+      logger.error({ error }, "Error handling settle coin selection");
+      await ctx.reply("❌ Error processing selection. Please try again.");
+    }
+  }
+
+  private async handleSettlePagination(
+    ctx: BotContext,
+    data: string
+  ): Promise<void> {
+    try {
+      await ctx.answerCbQuery();
+
+      // Parse: page:settle:{page}:{type}
+      const parts = data.split(":");
+      if (parts.length !== 4) {
+        await ctx.reply("❌ Invalid pagination data.");
+        return;
+      }
+
+      const page = parseInt(parts[2]);
+      const shiftType = parts[3];
+
+      const coins = await coinsCache.getAllCoins();
+      const pageSize = 8;
+      const startIdx = page * pageSize;
+      const endIdx = startIdx + pageSize;
+      const pageCoins = coins.slice(startIdx, endIdx);
+
+      const keyboard = pageCoins.map((coin: CoinData) => [
+        {
+          text: `${coin.coin.toUpperCase()} · ${coin.networks.join(", ")}`,
+          callback_data: `settle:${coin.coin}:${coin.networks[0]}:${shiftType}`,
+        },
+      ]);
+
+      // Add navigation buttons
+      const navButtons = [];
+      if (page > 0) {
+        navButtons.push({
+          text: "⬅️ Previous",
+          callback_data: `page:settle:${page - 1}:${shiftType}`,
+        });
+      }
+      if (endIdx < coins.length) {
+        navButtons.push({
+          text: "Next ➡️",
+          callback_data: `page:settle:${page + 1}:${shiftType}`,
+        });
+      }
+
+      if (navButtons.length > 0) {
+        keyboard.push(navButtons);
+      }
+
+      keyboard.push([{ text: "❌ Cancel", callback_data: "cancel" }]);
+
+      await ctx.editMessageText(
+        `📄 **Browse Settle Coins** (Page ${page + 1}/${Math.ceil(
+          coins.length / pageSize
+        )})\n\n` + `Select the coin you want to receive:`,
+        {
+          parse_mode: "Markdown",
+          reply_markup: { inline_keyboard: keyboard },
+        }
+      );
+    } catch (error) {
+      logger.error({ error }, "Error handling settle pagination");
+      await ctx.reply("❌ Error loading coins. Please try again.");
+    }
+  }
+
+  private async handleBrowseSettleCoins(
+    ctx: BotContext,
+    data: string
+  ): Promise<void> {
+    try {
+      await ctx.answerCbQuery();
+
+      // Parse: browse:settle:{type}
+      const parts = data.split(":");
+      if (parts.length !== 3) {
+        await ctx.reply("❌ Invalid browse data.");
+        return;
+      }
+
+      const shiftType = parts[2];
+
+      const coins = await coinsCache.getAllCoins();
+      const pageSize = 8;
+      const pageCoins = coins.slice(0, pageSize);
+
+      const keyboard = pageCoins.map((coin: CoinData) => [
+        {
+          text: `${coin.coin.toUpperCase()} · ${coin.networks.join(", ")}`,
+          callback_data: `settle:${coin.coin}:${coin.networks[0]}:${shiftType}`,
+        },
+      ]);
+
+      // Add navigation if more pages
+      if (coins.length > pageSize) {
+        keyboard.push([
+          {
+            text: "Next ➡️",
+            callback_data: `page:settle:1:${shiftType}`,
+          },
+        ]);
+      }
+
+      keyboard.push([{ text: "❌ Cancel", callback_data: "cancel" }]);
+
+      await ctx.editMessageText(
+        `📄 **Browse Settle Coins** (Page 1/${Math.ceil(
+          coins.length / pageSize
+        )})\n\n` + `Select the coin you want to receive:`,
+        {
+          parse_mode: "Markdown",
+          reply_markup: { inline_keyboard: keyboard },
+        }
+      );
+    } catch (error) {
+      logger.error({ error }, "Error browsing settle coins");
+      await ctx.reply("❌ Error loading coins. Please try again.");
+    }
+  }
+
+  private async handleSettleCoinSearch(
+    ctx: BotContext,
+    data: string
+  ): Promise<void> {
+    try {
+      await ctx.answerCbQuery();
+
+      // Parse: search:settle:{type}
+      const parts = data.split(":");
+      if (parts.length !== 3) {
+        await ctx.reply("❌ Invalid search data.");
+        return;
+      }
+
+      const shiftType = parts[2];
+
+      const userId = ctx.from?.id;
+      if (!userId) {
+        await ctx.reply("❌ Unable to identify user.");
+        return;
+      }
+
+      // Store search context in session
+      let session = userSessions.get(userId);
+      if (!session) {
+        session = {
+          step: "searching_settle",
+          timestamp: Date.now(),
+        };
+        userSessions.set(userId, session);
+      }
+
+      session.step = "searching_settle";
+      session.shiftType = shiftType as "fixed" | "variable";
+
+      await ctx.reply(
+        "🔍 **Search Settle Coins**\n\n" +
+          "Type the coin name or symbol you want to receive (e.g., 'ETH', 'Bitcoin', 'USDC')\n\n" +
+          "Or send /cancel to go back.",
+        { parse_mode: "Markdown" }
+      );
+    } catch (error) {
+      logger.error({ error }, "Error initiating settle coin search");
+      await ctx.reply("❌ Error starting search. Please try again.");
+    }
+  }
+
   private async handleDepositPagination(
     ctx: BotContext,
     data: string
@@ -1341,6 +1640,62 @@ export class TelegramBotService {
         return;
       }
 
+      // Check if this is a shift flow (from Fixed/Variable shift)
+      const session = userSessions.get(userId);
+      const isShiftFlow = session?.shiftType; // "fixed" or "variable"
+
+      if (isShiftFlow) {
+        // Handle Fixed/Variable shift flow
+        // Parse: deposit:{coin}:{network}:{type}
+        const parts = data.split(":");
+        if (parts.length !== 4) {
+          await ctx.reply("❌ Invalid selection. Please try again.");
+          return;
+        }
+
+        [, depositCoin, depositNetwork] = parts;
+        const shiftType = parts[3];
+
+        // Get settle coin from session
+        const settleCoin = session.settleCoin;
+        const settleNetwork = session.settleNetwork;
+
+        if (!settleCoin || !settleNetwork) {
+          await ctx.reply(
+            "❌ Session expired. Please start over with /createshift"
+          );
+          return;
+        }
+
+        // Store deposit details and ask for settle address
+        session.depositCoin = depositCoin;
+        session.depositNetwork = depositNetwork;
+        session.step = "awaiting_address";
+        userSessions.set(userId, session);
+
+        const fromCoin = `${depositCoin}-${depositNetwork}`;
+        const toCoin = `${settleCoin}-${settleNetwork}`;
+
+        logger.info(
+          { userId, fromCoin, toCoin, shiftType },
+          "Deposit coin selected, awaiting address"
+        );
+
+        await ctx.reply(
+          `✅ **Your Shift:**\n\n` +
+            `**You send:** ${depositCoin.toUpperCase()} (${depositNetwork})\n` +
+            `**You receive:** ${settleCoin.toUpperCase()} (${settleNetwork})\n` +
+            `**Type:** ${
+              shiftType === "fixed" ? "Fixed Rate" : "Variable Rate"
+            }\n\n` +
+            `Now, please send your **${settleNetwork}** address where you want to receive ${settleCoin.toUpperCase()}:`,
+          { parse_mode: "Markdown" }
+        );
+
+        return;
+      }
+
+      // Handle topup flow (existing logic)
       // Parse callback data: deposit:{coin}:{network}:{targetChain}_{amount}
       // OR old format: deposit_{coin}_{network}_{targetChain}_{amount}
       let targetChain: string;
@@ -1495,11 +1850,134 @@ export class TelegramBotService {
       const session = userSessions.get(userId);
       if (!session || session.step !== "awaiting_address") {
         await ctx.reply(
-          "❌ No active session. Please start with /topup command."
+          "❌ No active session. Please start with /topup or /createshift command."
         );
         return;
       }
 
+      // Check if this is a shift creation flow or topup flow
+      const isShiftFlow = session.shiftType; // "fixed" or "variable"
+
+      if (isShiftFlow) {
+        // Handle Fixed/Variable shift creation
+        if (
+          !session.settleCoin ||
+          !session.settleNetwork ||
+          !session.depositCoin ||
+          !session.depositNetwork
+        ) {
+          await ctx.reply(
+            "❌ Session expired. Please start over with /createshift"
+          );
+          return;
+        }
+
+        // Build coin identifiers
+        const fromCoin = `${session.depositCoin}-${session.depositNetwork}`;
+        const toCoin = `${session.settleCoin}-${session.settleNetwork}`;
+
+        // Validate address against settle network
+        const validationResult = validateAddress(
+          address,
+          session.settleNetwork
+        );
+        if (!validationResult.isValid) {
+          await ctx.reply(
+            `❌ *Invalid ${session.settleNetwork} address*\n\n` +
+              `${
+                validationResult.error || "Please provide a valid address."
+              }\n` +
+              `**Example:** ${getExampleAddress(session.settleNetwork)}`,
+            { parse_mode: "Markdown" }
+          );
+          return;
+        }
+
+        await ctx.reply("🔄 *Creating shift...*", { parse_mode: "Markdown" });
+
+        logger.info(
+          {
+            userId,
+            fromCoin,
+            toCoin,
+            shiftType: session.shiftType,
+            settleAddress: address,
+          },
+          "Creating shift order"
+        );
+
+        let shift: Shift;
+
+        if (session.shiftType === "fixed") {
+          // For fixed shifts, we need to get a quote first
+          const quote = await sideshift.requestFixedQuote({
+            depositCoin: fromCoin,
+            depositNetwork: session.depositNetwork,
+            settleCoin: toCoin,
+            settleNetwork: session.settleNetwork,
+            affiliateId: process.env.SIDESHIFT_AFFILIATE_ID,
+          });
+
+          shift = await sideshift.createFixedShift({
+            quoteId: quote.id,
+            settleAddress: address,
+            affiliateId: process.env.SIDESHIFT_AFFILIATE_ID,
+          });
+        } else {
+          // Variable shift
+          shift = await sideshift.createVariableShift({
+            depositCoin: fromCoin,
+            depositNetwork: session.depositNetwork,
+            settleCoin: toCoin,
+            settleNetwork: session.settleNetwork,
+            settleAddress: address,
+            affiliateId: process.env.SIDESHIFT_AFFILIATE_ID,
+          });
+        }
+
+        // Clear session
+        userSessions.delete(userId);
+
+        // Show shift details with deposit address
+        const keyboard = {
+          inline_keyboard: [
+            [{ text: "📊 Check Status", callback_data: `status_${shift.id}` }],
+            [
+              {
+                text: "❌ Cancel Order",
+                callback_data: `cancel_shift_${shift.id}`,
+              },
+            ],
+          ] as any[],
+        };
+
+        await ctx.reply(
+          `✅ *Shift Created!*\n\n` +
+            `**Order ID:** \`${shift.id}\`\n` +
+            `**Type:** ${
+              session.shiftType === "fixed" ? "Fixed Rate" : "Variable Rate"
+            }\n` +
+            `**Deposit:** ${session.depositCoin!.toUpperCase()} (${
+              session.depositNetwork
+            })\n` +
+            `**Receive:** ${session.settleCoin!.toUpperCase()} (${
+              session.settleNetwork
+            })\n` +
+            `**Rate:** ${shift.rate || "Variable"}\n\n` +
+            `**Deposit Address:**\n\`${shift.depositAddress}\`\n\n` +
+            `**Your Address:** \`${address}\`\n\n` +
+            `⏱️ *Expires:* ${new Date(shift.expiresAt).toLocaleString()}\n\n` +
+            `📤 Send your ${session.depositCoin!.toUpperCase()} to the deposit address to complete the shift.`,
+          {
+            parse_mode: "Markdown",
+            reply_markup: keyboard,
+          }
+        );
+
+        return;
+      }
+
+      // Handle topup flow (existing logic)
       // Validate address
       const network = getNetworkByAlias(session.targetNetwork!);
       if (!network) {
