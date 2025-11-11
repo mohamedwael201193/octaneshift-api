@@ -22,6 +22,34 @@ import * as uiHelpers from "./uiHelpers";
 
 // Utility function to extract meaningful error messages
 function extractErrorMessage(error: any): string {
+  // Handle SideShiftError specifically first
+  if (error instanceof SideShiftError) {
+    // Check details.error.message
+    if (error.details?.error?.message) {
+      return error.details.error.message;
+    }
+    // Check details as a whole
+    if (error.details) {
+      if (typeof error.details === "string") {
+        return error.details;
+      }
+      if (typeof error.details === "object") {
+        try {
+          const detailsStr = JSON.stringify(error.details);
+          if (detailsStr !== "{}") {
+            return `API Error: ${detailsStr}`;
+          }
+        } catch (e) {
+          // Fall through
+        }
+      }
+    }
+    // Use the main error message
+    if (error.message && error.message !== "[object Object]") {
+      return error.message;
+    }
+  }
+
   // Handle SideShift API errors with response data
   if (error.response?.data) {
     if (typeof error.response.data === "string") {
