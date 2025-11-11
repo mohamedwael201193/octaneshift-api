@@ -32,7 +32,7 @@ export default function BatchTopUp() {
   const [recipients, setRecipients] = useState<Recipient[]>([
     { settleAddress: "", settleAmount: "" },
   ]);
-  const [chain, setChain] = useState("ethereum");
+  const [chain, setChain] = useState("eth"); // Use backend's expected chain ID
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<BatchResult[]>([]);
   const [payoutId, setPayoutId] = useState<string>("");
@@ -162,11 +162,12 @@ export default function BatchTopUp() {
                 onChange={(e) => setChain(e.target.value)}
                 className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white"
               >
-                <option value="ethereum">Ethereum</option>
+                <option value="eth">Ethereum</option>
                 <option value="base">Base</option>
-                <option value="polygon">Polygon</option>
-                <option value="arbitrum">Arbitrum</option>
-                <option value="optimism">Optimism</option>
+                <option value="pol">Polygon</option>
+                <option value="arb">Arbitrum</option>
+                <option value="op">Optimism</option>
+                <option value="avax">Avalanche</option>
               </select>
             </div>
             <div className="flex items-end">
