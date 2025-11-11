@@ -40,7 +40,12 @@ export default function SwapInterface({
 
   const [fromToken, setFromToken] = useState("usdt-ethereum");
   const [toChain, setToChain] = useState(getToChainFromName(prefilledChain));
-  const [amount, setAmount] = useState(prefilledAmount || "10");
+  // Use minimum of 5 USDT to avoid "below minimum" errors from SideShift
+  const normalizedAmount =
+    prefilledAmount && parseFloat(prefilledAmount) < 5
+      ? "5"
+      : prefilledAmount || "10";
+  const [amount, setAmount] = useState(normalizedAmount);
   const [settleAddress, setSettleAddress] = useState(prefilledAddress || "");
   const [isCreatingShift, setIsCreatingShift] = useState(false);
   const [orderDetails, setOrderDetails] = useState<OrderDetails | null>(null);
