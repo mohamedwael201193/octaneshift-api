@@ -35,7 +35,14 @@ import { logger } from "./utils/logger";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "http://localhost:3000";
+
+// Parse FRONTEND_ORIGIN as comma-separated list to support multiple origins
+const FRONTEND_ORIGINS = (
+  process.env.FRONTEND_ORIGIN || "http://localhost:3000"
+)
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 // Initialize Telegram bot
 let telegramBotService: TelegramBotService | null = null;
@@ -88,15 +95,19 @@ app.use(
   })
 );
 
-// CORS configuration - strict frontend origin
+// CORS configuration - supports multiple frontend origins
 app.use(
   cors({
     origin: (origin, callback) => {
       // Allow requests with no origin (like mobile apps or curl requests)
       if (!origin) return callback(null, true);
 
-      // Allow configured frontend origin
-      if (origin === FRONTEND_ORIGIN) {
+      // Allow configured frontend origins
+      if (FRONTEND_ORIGINS.includes(origin)) {
+        logger.debug(
+          { origin, allowedOrigins: FRONTEND_ORIGINS },
+          "CORS: Origin allowed"
+        );
         return callback(null, true);
       }
 
@@ -105,9 +116,14 @@ app.use(
         process.env.NODE_ENV === "development" &&
         origin.startsWith("http://localhost:")
       ) {
+        logger.debug({ origin }, "CORS: Localhost allowed in development");
         return callback(null, true);
       }
 
+      logger.warn(
+        { origin, allowedOrigins: FRONTEND_ORIGINS },
+        "CORS: Origin blocked"
+      );
       callback(new Error("Not allowed by CORS"));
     },
     credentials: true,
@@ -1010,7 +1026,7 @@ async function startServer() {
       {
         port: PORT,
         environment: process.env.NODE_ENV || "development",
-        frontendOrigin: FRONTEND_ORIGIN,
+        frontendOrigins: FRONTEND_ORIGINS,
         telegramBot: !!telegramBotService,
       },
       "OctaneShift API server started"
