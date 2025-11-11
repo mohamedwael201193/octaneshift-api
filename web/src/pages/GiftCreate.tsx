@@ -8,7 +8,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
 export default function GiftCreate() {
   const [formData, setFormData] = useState({
-    chain: "ethereum",
+    chain: "eth",
     settleAmount: "",
     settleAddress: "",
     message: "",
@@ -67,7 +67,7 @@ export default function GiftCreate() {
   const handleReset = () => {
     setGiftUrl("");
     setFormData({
-      chain: "ethereum",
+      chain: "eth",
       settleAmount: "",
       settleAddress: "",
       message: "",
@@ -117,12 +117,12 @@ export default function GiftCreate() {
                 }
                 className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               >
-                <option value="ethereum">Ethereum</option>
+                <option value="eth">Ethereum</option>
                 <option value="base">Base</option>
-                <option value="polygon">Polygon</option>
-                <option value="arbitrum">Arbitrum</option>
-                <option value="optimism">Optimism</option>
-                <option value="avalanche">Avalanche</option>
+                <option value="pol">Polygon</option>
+                <option value="arb">Arbitrum</option>
+                <option value="op">Optimism</option>
+                <option value="avax">Avalanche</option>
               </select>
             </div>
 

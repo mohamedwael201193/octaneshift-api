@@ -24,12 +24,19 @@ export default function SwapInterface({
   prefilledAmount,
   prefilledAddress,
 }: SwapInterfaceProps = {}) {
-  // Map chain names to toChain format (e.g., 'base' -> 'eth-base')
+  // Map chain names to toChain format (e.g., 'base' -> 'eth-base', 'eth' -> 'eth-ethereum')
   const getToChainFromName = (chainName?: string) => {
     if (!chainName) return "eth-base";
     const mapping: Record<string, string> = {
-      ethereum: "eth-ethereum",
+      // Short IDs (new format)
+      eth: "eth-ethereum",
       base: "eth-base",
+      arb: "eth-arbitrum",
+      op: "eth-optimism",
+      pol: "matic-polygon",
+      avax: "avax-avalanche",
+      // Full names (old format - for backward compatibility)
+      ethereum: "eth-ethereum",
       arbitrum: "eth-arbitrum",
       optimism: "eth-optimism",
       polygon: "matic-polygon",
