@@ -45,9 +45,12 @@ export const CreateVariableShiftRequestSchema = z.object({
   settleCoin: z.string(),
   settleNetwork: z.string(),
   settleAddress: z.string(),
+  settleMemo: z.string().optional(),
   refundAddress: z.string().optional(),
+  refundMemo: z.string().optional(),
   affiliateId: z.string().optional(),
   commissionRate: z.number().optional(),
+  externalId: z.string().optional(),
 });
 
 export const FixedQuoteRequestSchema = z.object({
@@ -79,8 +82,11 @@ export const FixedQuoteSchema = z.object({
 export const CreateFixedShiftRequestSchema = z.object({
   quoteId: z.string(),
   settleAddress: z.string(),
+  settleMemo: z.string().optional(),
   refundAddress: z.string().optional(),
+  refundMemo: z.string().optional(),
   affiliateId: z.string().optional(),
+  externalId: z.string().optional(),
 });
 
 export const ShiftSchema = z.object({
@@ -422,6 +428,78 @@ export class SideShiftClient {
       requestOptions.userIp = userIp;
     }
     const data = await this.makeRequest<Shift>("/shifts/fixed", requestOptions);
+
+    return ShiftSchema.parse(data);
+  }
+
+  /**
+   * Cancel an order (must be called after 5 minutes)
+   */
+  async cancelOrder(
+    orderId: string,
+    userIp?: string
+  ): Promise<{ message: string }> {
+    const requestOptions: any = {
+      method: "POST",
+      body: { orderId },
+    };
+    if (userIp) {
+      requestOptions.userIp = userIp;
+    }
+
+    try {
+      await this.makeRequest("/cancel-order", requestOptions);
+      return { message: "Order cancelled successfully" };
+    } catch (error) {
+      if (error instanceof SideShiftError) {
+        // Enhance error message for common scenarios
+        if (error.status === 400) {
+          throw new SideShiftError(
+            400,
+            "Cannot cancel order yet. Orders can only be cancelled after 5 minutes.",
+            "TOO_EARLY",
+            error.details
+          );
+        }
+        if (error.status === 404) {
+          throw new SideShiftError(
+            404,
+            "Order not found or already completed.",
+            "NOT_FOUND",
+            error.details
+          );
+        }
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Set or update refund address for a shift
+   */
+  async setRefundAddress(
+    shiftId: string,
+    address: string,
+    memo?: string,
+    userIp?: string
+  ): Promise<Shift> {
+    const body: any = { address };
+    if (memo) {
+      body.memo = memo;
+    }
+
+    const requestOptions: any = {
+      method: "POST",
+      body,
+    };
+    if (userIp) {
+      requestOptions.userIp = userIp;
+    }
+
+    const data = await this.makeRequest<Shift>(
+      `/shifts/${shiftId}/set-refund-address`,
+      requestOptions
+    );
 
     return ShiftSchema.parse(data);
   }

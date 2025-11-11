@@ -4,12 +4,14 @@ import express from "express";
 import helmet from "helmet";
 import pinoHttp from "pino-http";
 import { createTelegramBot, TelegramBotService } from "./bot/telegram";
+import * as coinsCache from "./lib/coinsCache";
 import { authenticateToken } from "./middleware/auth";
 import { errorHandler, notFoundHandler } from "./middleware/errors";
 import { extractClientIP } from "./middleware/ip";
 import { rateLimitConfig } from "./middleware/rateLimit";
 import { addSecurityHeaders, sanitizeInput } from "./middleware/security";
 import adminRoutes from "./routes/admin";
+import metaRoutes from "./routes/meta";
 import presetsRoutes from "./routes/presets";
 import shiftsRoutes from "./routes/shifts";
 import sideshiftRoutes from "./routes/sideshift";
@@ -493,6 +495,7 @@ if (process.env.NODE_ENV === "development") {
 }
 
 // API routes
+app.use("/api/meta", metaRoutes);
 app.use("/api", sideshiftRoutes);
 app.use("/api/shifts", shiftsRoutes);
 app.use("/api/stats", statsRoutes);
@@ -958,6 +961,16 @@ async function startServer() {
 
   // Initialize store first
   await initializeStore();
+
+  // Initialize coins cache
+  console.log("💰 Initializing coins cache...");
+  try {
+    await coinsCache.initializeCoinsCache();
+    console.log("✅ Coins cache initialized successfully");
+  } catch (error) {
+    console.error("❌ Failed to initialize coins cache:", error);
+    logger.error({ error }, "Failed to initialize coins cache");
+  }
 
   // Initialize bot
   await initializeBot();

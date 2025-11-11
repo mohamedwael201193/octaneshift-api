@@ -12,6 +12,7 @@ import {
   logBotConfig,
 } from "./config";
 import { getNetworkByAlias, getSupportedChains } from "./networkMap";
+import * as uiHelpers from "./uiHelpers";
 
 // Utility function to extract meaningful error messages
 function extractErrorMessage(error: any): string {
@@ -332,6 +333,26 @@ export class TelegramBotService {
       }
     });
 
+    // Cancel order command
+    this.bot.command("cancel_order", async (ctx): Promise<void> => {
+      const args = ctx.message.text.split(" ").slice(1);
+
+      if (args.length !== 1) {
+        await ctx.reply(
+          "❌ *Invalid format*\n\n" +
+            "**Usage:** `/cancel_order <shiftId>`\n" +
+            "**Example:** `/cancel_order abc123def456`\n\n" +
+            "⚠️ *Note:* You can only cancel an order **5+ minutes** after creation.\n" +
+            "Orders cancelled earlier will return an error.",
+          { parse_mode: "Markdown" }
+        );
+        return;
+      }
+
+      const shiftId = args[0];
+      await this.handleCancelOrder(ctx, shiftId);
+    });
+
     // Handle callback queries
     this.bot.on("callback_query", async (ctx) => {
       const callbackQuery = ctx.callbackQuery;
@@ -343,8 +364,19 @@ export class TelegramBotService {
       const data = callbackQuery.data;
 
       try {
-        if (data.startsWith("deposit_")) {
+        if (data.startsWith("deposit:") || data.startsWith("deposit_")) {
           await this.handleDepositSelection(ctx, data);
+        } else if (data.startsWith("page:deposit:")) {
+          await this.handleDepositPagination(ctx, data);
+        } else if (data.startsWith("browse:deposit:")) {
+          await this.handleBrowseAllCoins(ctx, data);
+        } else if (data.startsWith("search:deposit:")) {
+          await this.handleCoinSearch(ctx, data);
+        } else if (data === "cancel" || data === "cancel_topup") {
+          await this.handleCancelTopup(ctx);
+        } else if (data === "noop") {
+          // No operation - just acknowledge
+          await ctx.answerCbQuery();
         } else if (data.startsWith("status_")) {
           const shiftId = data.replace("status_", "");
           await this.handleStatus(ctx, shiftId);
@@ -429,7 +461,7 @@ export class TelegramBotService {
                   "🔷 **Ethereum** - eth, ethereum, ETH\n" +
                   "🔶 **Arbitrum** - arb, arbitrum, ARB\n" +
                   "🟣 **Optimism** - op, optimism, OP\n" +
-                  "🟣 **Polygon** - pol, matic, polygon\n" +
+                  "🟣 **Polygon** - pol, polygon\n" +
                   "🔴 **Avalanche** - avax, avalanche, AVAX\n\n" +
                   "*Usage:* `/topup <chain> <amount>`\n" +
                   "*Example:* `/topup base 0.01`",
@@ -451,7 +483,7 @@ export class TelegramBotService {
                   "**Format:** `/topup <chain> <amount>`\n\n" +
                   "**Examples:**\n" +
                   "• `/topup base 0.01` - Top up 0.01 ETH on Base\n" +
-                  "• `/topup matic 5` - Top up 5 MATIC on Polygon\n" +
+                  "• `/topup pol 5` - Top up 5 POL on Polygon\n" +
                   "• `/topup arb 0.005` - Top up 0.005 ETH on Arbitrum\n\n" +
                   `**Supported chains:** ${getSupportedChains().join(", ")}`,
                 { parse_mode: "Markdown" }
@@ -569,15 +601,11 @@ export class TelegramBotService {
         parse_mode: "Markdown",
       });
 
-      // Show deposit asset selection
-      const keyboard = {
-        inline_keyboard: COMMON_DEPOSIT_ASSETS.map((asset) => [
-          {
-            text: asset.display,
-            callback_data: `deposit_${asset.coin}_${asset.network}_${chain}_${amount}`,
-          },
-        ]).concat([[{ text: "❌ Cancel", callback_data: "cancel_topup" }]]),
-      };
+      // Show popular deposit asset selection with dynamic coins
+      const keyboard = uiHelpers.buildPopularCoinsKeyboard(
+        "deposit",
+        `${chain}_${amount}`
+      );
 
       // Store user session
       userSessions.set(userId, {
@@ -717,6 +745,182 @@ export class TelegramBotService {
           { parse_mode: "Markdown" }
         );
       }
+    }
+  }
+
+  private async handleCancelOrder(
+    ctx: BotContext,
+    shiftId: string
+  ): Promise<void> {
+    try {
+      await ctx.reply("🔄 *Processing cancellation...*", {
+        parse_mode: "Markdown",
+      });
+
+      // Call the cancel endpoint
+      await sideshift.cancelOrder(shiftId);
+
+      await ctx.reply(
+        `✅ *Order Cancelled Successfully*\n\n` +
+          `**Shift ID:** \`${shiftId}\`\n\n` +
+          `Your order has been cancelled. If you made a deposit, ` +
+          `it will be refunded to your refund address.\n\n` +
+          `Use \`/status ${shiftId}\` to check the refund status.`,
+        { parse_mode: "Markdown" }
+      );
+
+      logger.info({ shiftId, userId: ctx.from?.id }, "Order cancelled via bot");
+    } catch (error) {
+      const errorMessage = extractErrorMessage(error);
+
+      // Check for 5-minute rule violation
+      if (
+        errorMessage.includes("5 minutes") ||
+        errorMessage.includes("too early") ||
+        errorMessage.includes("wait")
+      ) {
+        await ctx.reply(
+          `⏰ *Cannot Cancel Yet*\n\n` +
+            `**Shift ID:** \`${shiftId}\`\n\n` +
+            `⚠️ You can only cancel an order **5 minutes** after it was created.\n\n` +
+            `This is a SideShift policy to prevent abuse. Please wait a few more minutes and try again.\n\n` +
+            `**Tip:** Use \`/status ${shiftId}\` to check when you can cancel.`,
+          { parse_mode: "Markdown" }
+        );
+      } else if (error instanceof SideShiftError && error.status === 404) {
+        await ctx.reply(
+          `❌ *Order Not Found*\n\n` +
+            `**Shift ID:** \`${shiftId}\`\n\n` +
+            `This shift ID was not found. Please check the ID and try again.`,
+          { parse_mode: "Markdown" }
+        );
+      } else {
+        await ctx.reply(
+          `❌ *Cancellation Failed*\n\n` +
+            `**Shift ID:** \`${shiftId}\`\n\n` +
+            `**Error:** ${errorMessage}\n\n` +
+            `Please try again or contact support if the issue persists.`,
+          { parse_mode: "Markdown" }
+        );
+      }
+
+      logger.error(
+        { error, shiftId, userId: ctx.from?.id },
+        "Failed to cancel order via bot"
+      );
+    }
+  }
+
+  private async handleDepositPagination(
+    ctx: BotContext,
+    data: string
+  ): Promise<void> {
+    try {
+      await ctx.answerCbQuery();
+
+      // Parse: page:deposit:{page}:{context}
+      const parts = data.split(":");
+      if (parts.length !== 4) {
+        await ctx.reply("❌ Invalid pagination. Please try again.");
+        return;
+      }
+
+      const page = parseInt(parts[2]);
+      const context = parts[3]; // e.g., "base_0.01"
+
+      // Get all coins and paginate
+      const allCoins = uiHelpers.getAllCoinOptions();
+      const pagination = uiHelpers.paginate(allCoins, page, 6);
+      const keyboard = uiHelpers.buildPaginatedKeyboard(
+        pagination,
+        "deposit",
+        context
+      );
+
+      await ctx.editMessageReplyMarkup(keyboard);
+    } catch (error) {
+      logger.error({ error, data }, "Error handling pagination");
+      await ctx.answerCbQuery("Error loading page");
+    }
+  }
+
+  private async handleBrowseAllCoins(
+    ctx: BotContext,
+    data: string
+  ): Promise<void> {
+    try {
+      await ctx.answerCbQuery();
+
+      // Parse: browse:deposit:{context}
+      const parts = data.split(":");
+      if (parts.length !== 3) {
+        await ctx.reply("❌ Invalid browse request. Please try again.");
+        return;
+      }
+
+      const context = parts[2]; // e.g., "base_0.01"
+
+      // Get all coins and show first page
+      const allCoins = uiHelpers.getAllCoinOptions();
+      const pagination = uiHelpers.paginate(allCoins, 0, 6);
+      const keyboard = uiHelpers.buildPaginatedKeyboard(
+        pagination,
+        "deposit",
+        context
+      );
+
+      await ctx.editMessageText(
+        `📋 *Browse All Coins* (${allCoins.length} total)\n\n` +
+          `Choose a coin/network combination to deposit.\n` +
+          `🏷️ indicates memo/tag required.`,
+        {
+          parse_mode: "Markdown",
+          reply_markup: keyboard,
+        }
+      );
+    } catch (error) {
+      logger.error({ error, data }, "Error browsing coins");
+      await ctx.answerCbQuery("Error loading coins");
+    }
+  }
+
+  private async handleCoinSearch(ctx: BotContext, data: string): Promise<void> {
+    try {
+      await ctx.answerCbQuery();
+
+      // Parse: search:deposit:{context}
+      const parts = data.split(":");
+      if (parts.length !== 3) {
+        await ctx.reply("❌ Invalid search request. Please try again.");
+        return;
+      }
+
+      const context = parts[2]; // e.g., "base_0.01"
+
+      // Inform user about search
+      await ctx.editMessageText(
+        `🔍 *Search Coins*\n\n` +
+          `Type the coin symbol or name you want to search for.\n\n` +
+          `Examples: \`btc\`, \`ethereum\`, \`usdc\`, \`sol\`, \`doge\`\n\n` +
+          `Or use /topup to start over.`,
+        {
+          parse_mode: "Markdown",
+        }
+      );
+
+      // Set user session to awaiting search query
+      const userId = ctx.from?.id;
+      if (userId) {
+        const session = userSessions.get(userId);
+        if (session) {
+          session.step = "awaiting_deposit_asset";
+          // Store context in session for later
+          (session as any).searchContext = context;
+        }
+      }
+    } catch (error) {
+      logger.error({ error, data }, "Error initiating search");
+      await ctx.answerCbQuery("Error starting search");
     }
   }
 
@@ -865,15 +1069,31 @@ export class TelegramBotService {
         return;
       }
 
-      // Parse callback data: deposit_{coin}_{network}_{targetChain}_{amount}
-      const parts = data.split("_");
-      if (parts.length !== 5) {
-        await ctx.reply("❌ Invalid selection. Please try again.");
-        return;
+      // Parse callback data: deposit:{coin}:{network}:{targetChain}_{amount}
+      // OR old format: deposit_{coin}_{network}_{targetChain}_{amount}
+      let targetChain: string;
+      let amountStr: string;
+
+      if (data.includes(":")) {
+        // New format with colon separator
+        const parts = data.split(":");
+        if (parts.length !== 4) {
+          await ctx.reply("❌ Invalid selection. Please try again.");
+          return;
+        }
+        [, depositCoin, depositNetwork] = parts;
+        const contextParts = parts[3].split("_");
+        [targetChain, amountStr] = contextParts;
+      } else {
+        // Old format with underscore separator (backward compatibility)
+        const parts = data.split("_");
+        if (parts.length !== 5) {
+          await ctx.reply("❌ Invalid selection. Please try again.");
+          return;
+        }
+        [, depositCoin, depositNetwork, targetChain, amountStr] = parts;
       }
 
-      [, depositCoin, depositNetwork] = parts;
-      const [, , , targetChain, amountStr] = parts;
       const amount = parseFloat(amountStr);
 
       // Get quote from SideShift

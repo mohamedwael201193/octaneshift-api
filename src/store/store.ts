@@ -35,6 +35,7 @@ export interface Alert {
 export interface ShiftJob {
   id: string;
   createdAt: string;
+  updatedAt?: string;
   userId: string;
   watchlistId?: string;
   shiftId: string;
@@ -44,6 +45,9 @@ export interface ShiftJob {
   settleNetwork: string;
   depositAddress: string;
   settleAddress: string;
+  settleMemo?: string;
+  refundAddress?: string;
+  refundMemo?: string;
   status:
     | "waiting"
     | "pending"

@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { z } from "zod";
+import * as idempotency from "../lib/idempotency";
 import sideshift from "../lib/sideshift";
+import * as simulator from "../lib/simulator";
 import { authenticateToken } from "../middleware/auth";
 import {
   requireKYCForHighValue,
@@ -28,7 +30,9 @@ const FixedQuoteRequestSchema = z.object({
 const CreateFixedShiftSchema = z.object({
   quoteId: z.string().min(1),
   settleAddress: z.string().min(1),
+  settleMemo: z.string().optional(),
   refundAddress: z.string().optional(),
+  refundMemo: z.string().optional(),
   watchlistId: z.string().optional(),
 });
 
@@ -38,7 +42,9 @@ const CreateVariableShiftSchema = z.object({
   settleCoin: z.string().min(1),
   settleNetwork: z.string().min(1),
   settleAddress: z.string().min(1),
+  settleMemo: z.string().optional(),
   refundAddress: z.string().optional(),
+  refundMemo: z.string().optional(),
   watchlistId: z.string().optional(),
 });
 
@@ -60,14 +66,26 @@ router.post(
     try {
       const userId = (req as any).userId;
 
+      // Check quote rate limit (20/min)
+      const quoteRateLimit = idempotency.checkQuoteRateLimit(userId);
+      if (!quoteRateLimit.allowed) {
+        const resetIn = Math.ceil(
+          (quoteRateLimit.resetTime - Date.now()) / 1000
+        );
+        return res.status(429).json({
+          error: "Quote rate limit exceeded. Maximum 20 quotes per minute.",
+          retryAfter: resetIn,
+          resetTime: new Date(quoteRateLimit.resetTime).toISOString(),
+        });
+      }
+
       // Validate request
       const validationResult = FixedQuoteRequestSchema.safeParse(req.body);
       if (!validationResult.success) {
-        res.status(400).json({
+        return res.status(400).json({
           error: "Invalid request",
           details: validationResult.error.errors,
         });
-        return;
       }
 
       const quoteRequest = validationResult.data;
@@ -82,8 +100,46 @@ router.post(
         "Requesting fixed quote"
       );
 
-      // Request quote from SideShift
-      const quote = await sideshift.requestFixedQuote(quoteRequest, userIp);
+      // Check regional restrictions
+      const regionalCheck = await simulator.checkRegionalRestrictions(
+        sideshift,
+        userIp
+      );
+
+      if (regionalCheck.simulatorMode) {
+        // Return simulated quote with 451 status
+        const simulatedQuote = simulator.createSimulatedFixedQuote({
+          userId,
+          depositCoin: quoteRequest.depositCoin,
+          depositNetwork: quoteRequest.depositNetwork,
+          settleCoin: quoteRequest.settleCoin,
+          settleNetwork: quoteRequest.settleNetwork,
+          settleAmount: quoteRequest.settleAmount || "0.01",
+        });
+
+        logger.info(
+          {
+            userId,
+            quoteId: simulatedQuote.id,
+            simulated: true,
+          },
+          "Returning simulated quote due to regional restrictions"
+        );
+
+        return res.status(451).json({
+          success: true,
+          quote: simulatedQuote,
+          simulator: true,
+          permissions: regionalCheck.permissions,
+        });
+      }
+
+      // Request quote from SideShift with retry logic
+      const quote = await idempotency.withRetry(
+        () => sideshift.requestFixedQuote(quoteRequest, userIp),
+        {},
+        "fixed-quote-request"
+      );
 
       logger.info(
         {
@@ -95,7 +151,7 @@ router.post(
         "Fixed quote received"
       );
 
-      res.json({
+      return res.json({
         success: true,
         quote,
       });
@@ -106,12 +162,12 @@ router.post(
       );
 
       if (error.status && error.status < 500) {
-        res.status(error.status).json({
+        return res.status(error.status).json({
           error: error.message || "Failed to request quote",
           code: error.code,
         });
       } else {
-        res.status(500).json({
+        return res.status(500).json({
           error: "Internal server error",
         });
       }
@@ -133,19 +189,44 @@ router.post(
     try {
       const userId = (req as any).userId;
 
+      // Check shift rate limit (5/min)
+      const shiftRateLimit = idempotency.checkShiftRateLimit(userId);
+      if (!shiftRateLimit.allowed) {
+        const resetIn = Math.ceil(
+          (shiftRateLimit.resetTime - Date.now()) / 1000
+        );
+        return res.status(429).json({
+          error:
+            "Shift creation rate limit exceeded. Maximum 5 shifts per minute.",
+          retryAfter: resetIn,
+          resetTime: new Date(shiftRateLimit.resetTime).toISOString(),
+        });
+      }
+
+      // Enforce sequential delay between shift creations
+      await idempotency.enforceSequentialDelay();
+
       // Validate request
       const validationResult = CreateFixedShiftSchema.safeParse(req.body);
       if (!validationResult.success) {
-        res.status(400).json({
+        return res.status(400).json({
           error: "Invalid request",
           details: validationResult.error.errors,
         });
-        return;
       }
 
-      const { quoteId, settleAddress, refundAddress, watchlistId } =
-        validationResult.data;
+      const {
+        quoteId,
+        settleAddress,
+        settleMemo,
+        refundAddress,
+        refundMemo,
+        watchlistId,
+      } = validationResult.data;
       const userIp = (req as any).clientIp;
+
+      // Generate external ID for idempotency
+      const externalId = idempotency.generateExternalId(userId, settleAddress);
 
       logger.info(
         {
@@ -153,6 +234,7 @@ router.post(
           quoteId,
           settleAddress,
           watchlistId,
+          externalId,
         },
         "Creating fixed shift"
       );
@@ -161,23 +243,91 @@ router.post(
       if (watchlistId) {
         const watchlist = store.getWatchlist(watchlistId);
         if (!watchlist) {
-          res.status(404).json({ error: "Watchlist not found" });
-          return;
+          return res.status(404).json({ error: "Watchlist not found" });
         }
         if (watchlist.userId !== userId) {
-          res.status(403).json({ error: "Unauthorized" });
-          return;
+          return res.status(403).json({ error: "Unauthorized" });
         }
       }
 
-      // Create shift from quote
-      const shift = await sideshift.createFixedShift(
-        {
-          quoteId,
-          settleAddress,
-          refundAddress,
-        },
+      // Check regional restrictions before creating shift
+      const regionalCheck = await simulator.checkRegionalRestrictions(
+        sideshift,
         userIp
+      );
+
+      if (regionalCheck.simulatorMode) {
+        // In simulator mode, use reasonable defaults
+        // (We don't have access to the original quote details)
+        const simulatedShift = simulator.createSimulatedFixedShift({
+          userId,
+          depositCoin: "btc",
+          depositNetwork: "bitcoin",
+          settleCoin: "eth",
+          settleNetwork: "ethereum",
+          settleAmount: "0.01",
+          settleAddress,
+          settleMemo,
+          refundAddress,
+          refundMemo,
+        });
+
+        // Store simulated shift job for UI consistency
+        const simulatedJob = store.createShiftJob({
+          userId,
+          shiftId: simulatedShift.id,
+          watchlistId,
+          depositCoin: simulatedShift.depositCoin,
+          depositNetwork: simulatedShift.depositNetwork,
+          settleCoin: simulatedShift.settleCoin,
+          settleNetwork: simulatedShift.settleNetwork,
+          depositAddress: simulatedShift.depositAddress,
+          settleAddress: simulatedShift.settleAddress,
+          settleMemo,
+          refundAddress,
+          refundMemo,
+          status: simulatedShift.status,
+          type: "fixed",
+          rate: simulatedShift.rate,
+          depositAmount: simulatedShift.depositAmount,
+          settleAmount: simulatedShift.settleAmount,
+          expiresAt: simulatedShift.expiresAt,
+        });
+
+        logger.info(
+          {
+            userId,
+            shiftId: simulatedShift.id,
+            simulated: true,
+          },
+          "Returning simulated fixed shift due to regional restrictions"
+        );
+
+        return res.status(451).json({
+          success: true,
+          shift: simulatedShift,
+          shiftJob: simulatedJob,
+          simulator: true,
+          permissions: regionalCheck.permissions,
+        });
+      }
+
+      // Create shift from quote with retry logic
+      const shift = await idempotency.withRetry(
+        () =>
+          sideshift.createFixedShift(
+            {
+              quoteId,
+              settleAddress,
+              settleMemo,
+              refundAddress,
+              refundMemo,
+              externalId,
+            },
+            userIp
+          ),
+        {},
+        "create-fixed-shift"
       );
 
       // Create shift job in store
@@ -191,6 +341,9 @@ router.post(
         settleNetwork: shift.settleNetwork,
         depositAddress: shift.depositAddress,
         settleAddress: shift.settleAddress,
+        settleMemo,
+        refundAddress,
+        refundMemo,
         status: shift.status,
         type: "fixed",
         rate: shift.rate,
@@ -205,11 +358,12 @@ router.post(
           shiftId: shift.id,
           shiftJobId: shiftJob.id,
           depositAddress: shift.depositAddress,
+          externalId,
         },
         "Fixed shift created successfully"
       );
 
-      res.json({
+      return res.json({
         success: true,
         shift,
         shiftJob,
@@ -221,12 +375,12 @@ router.post(
       );
 
       if (error.status && error.status < 500) {
-        res.status(error.status).json({
+        return res.status(error.status).json({
           error: error.message || "Failed to create shift",
           code: error.code,
         });
       } else {
-        res.status(500).json({
+        return res.status(500).json({
           error: "Internal server error",
         });
       }
@@ -252,14 +406,27 @@ router.post(
     try {
       const userId = (req as any).userId;
 
+      // Check shift rate limit (5 shifts per minute)
+      const rateLimitCheck = idempotency.checkShiftRateLimit(userId);
+      if (!rateLimitCheck.allowed) {
+        return res.status(429).json({
+          error: "Rate limit exceeded",
+          retryAfter: Math.ceil((rateLimitCheck.resetTime - Date.now()) / 1000),
+          resetTime: new Date(rateLimitCheck.resetTime).toISOString(),
+          limit: "5 shifts per minute",
+        });
+      }
+
+      // Enforce sequential delay (800ms between operations)
+      await idempotency.enforceSequentialDelay();
+
       // Validate request
       const validationResult = CreateVariableShiftSchema.safeParse(req.body);
       if (!validationResult.success) {
-        res.status(400).json({
+        return res.status(400).json({
           error: "Invalid request",
           details: validationResult.error.errors,
         });
-        return;
       }
 
       const {
@@ -268,10 +435,19 @@ router.post(
         settleCoin,
         settleNetwork,
         settleAddress,
+        settleMemo,
         refundAddress,
+        refundMemo,
         watchlistId,
       } = validationResult.data;
       const userIp = (req as any).clientIp;
+
+      // Generate external ID for idempotency
+      const externalId = idempotency.generateExternalId(
+        userId,
+        settleAddress,
+        Date.now()
+      );
 
       logger.info(
         {
@@ -279,6 +455,7 @@ router.post(
           depositCoin,
           settleCoin,
           watchlistId,
+          externalId,
         },
         "Creating variable shift"
       );
@@ -287,26 +464,94 @@ router.post(
       if (watchlistId) {
         const watchlist = store.getWatchlist(watchlistId);
         if (!watchlist) {
-          res.status(404).json({ error: "Watchlist not found" });
-          return;
+          return res.status(404).json({ error: "Watchlist not found" });
         }
         if (watchlist.userId !== userId) {
-          res.status(403).json({ error: "Unauthorized" });
-          return;
+          return res.status(403).json({ error: "Unauthorized" });
         }
       }
 
-      // Create variable shift
-      const shift = await sideshift.createVariableShift(
-        {
+      // Check regional restrictions before creating shift
+      const regionalCheck = await simulator.checkRegionalRestrictions(
+        sideshift,
+        userIp
+      );
+
+      if (regionalCheck.simulatorMode) {
+        // Return simulated variable shift with 451 status
+        const simulatedShift = simulator.createSimulatedVariableShift({
+          userId,
           depositCoin,
           depositNetwork,
           settleCoin,
           settleNetwork,
           settleAddress,
+          settleMemo,
           refundAddress,
+          refundMemo,
+        });
+
+        // Store simulated shift job for UI consistency
+        const simulatedJob = store.createShiftJob({
+          userId,
+          shiftId: simulatedShift.id,
+          watchlistId,
+          depositCoin: simulatedShift.depositCoin,
+          depositNetwork: simulatedShift.depositNetwork,
+          settleCoin: simulatedShift.settleCoin,
+          settleNetwork: simulatedShift.settleNetwork,
+          depositAddress: simulatedShift.depositAddress,
+          settleAddress: simulatedShift.settleAddress,
+          settleMemo,
+          refundAddress,
+          refundMemo,
+          status: simulatedShift.status,
+          type: "variable",
+          expiresAt: simulatedShift.expiresAt,
+        });
+
+        logger.info(
+          {
+            userId,
+            shiftId: simulatedShift.id,
+            simulated: true,
+          },
+          "Returning simulated variable shift due to regional restrictions"
+        );
+
+        return res.status(451).json({
+          success: true,
+          shift: simulatedShift,
+          shiftJob: simulatedJob,
+          simulator: true,
+          permissions: regionalCheck.permissions,
+        });
+      }
+
+      // Create variable shift with retry logic
+      const shift = await idempotency.withRetry(
+        () =>
+          sideshift.createVariableShift(
+            {
+              depositCoin,
+              depositNetwork,
+              settleCoin,
+              settleNetwork,
+              settleAddress,
+              settleMemo,
+              refundAddress,
+              refundMemo,
+              externalId,
+            },
+            userIp
+          ),
+        {
+          maxRetries: 3,
+          baseDelay: 1000,
+          maxDelay: 30000,
+          backoffMultiplier: 2,
         },
-        userIp
+        "createVariableShift"
       );
 
       // Create shift job in store
@@ -320,6 +565,9 @@ router.post(
         settleNetwork: shift.settleNetwork,
         depositAddress: shift.depositAddress,
         settleAddress: shift.settleAddress,
+        settleMemo,
+        refundAddress,
+        refundMemo,
         status: shift.status,
         type: "variable",
         expiresAt: shift.expiresAt,
@@ -335,7 +583,7 @@ router.post(
         "Variable shift created successfully"
       );
 
-      res.json({
+      return res.json({
         success: true,
         shift,
         shiftJob,
@@ -347,12 +595,12 @@ router.post(
       );
 
       if (error.status && error.status < 500) {
-        res.status(error.status).json({
+        return res.status(error.status).json({
           error: error.message || "Failed to create shift",
           code: error.code,
         });
       } else {
-        res.status(500).json({
+        return res.status(500).json({
           error: "Internal server error",
         });
       }
@@ -466,5 +714,168 @@ router.get("/", authenticateToken, async (req, res) => {
     });
   }
 });
+
+/**
+ * GET /api/shifts/rate-limit-stats
+ * Get user's current rate limit status
+ */
+router.get("/rate-limit-stats", authenticateToken, async (req, res) => {
+  try {
+    const userId = (req as any).userId;
+
+    const stats = idempotency.getUserRateLimitStats(userId);
+
+    res.json({
+      success: true,
+      stats,
+    });
+  } catch (error: any) {
+    logger.error(
+      { error, userId: (req as any).userId },
+      "Failed to get rate limit stats"
+    );
+
+    res.status(500).json({
+      error: "Internal server error",
+    });
+  }
+});
+
+/**
+ * POST /api/shifts/cancel
+ * Cancel an order (must be after 5 minutes)
+ */
+router.post(
+  "/cancel",
+  authenticateToken,
+  rateLimitConfig.strict,
+  async (req, res) => {
+    try {
+      const { shiftId } = req.body;
+      const userId = (req as any).userId;
+      const clientIp = (req as any).clientIp;
+
+      if (!shiftId) {
+        return res.status(400).json({ error: "shiftId is required" });
+      }
+
+      // Verify the shift belongs to the user
+      const shiftJob = store.getShiftJob(shiftId);
+      if (!shiftJob) {
+        return res.status(404).json({ error: "Shift not found" });
+      }
+
+      if (shiftJob.userId !== userId) {
+        return res
+          .status(403)
+          .json({ error: "Not authorized to cancel this shift" });
+      }
+
+      // Call SideShift cancel API
+      const result = await sideshift.cancelOrder(shiftId, clientIp);
+
+      // Update shift status in our records
+      shiftJob.status = "refunding";
+      shiftJob.updatedAt = new Date().toISOString();
+
+      logger.info({ shiftId, userId }, "Order cancelled successfully");
+
+      return res.json({
+        success: true,
+        message: result.message,
+        shiftId,
+      });
+    } catch (error: any) {
+      logger.error(
+        { error, shiftId: req.body.shiftId },
+        "Failed to cancel order"
+      );
+
+      if (error.status && error.status < 500) {
+        return res.status(error.status).json({
+          error: error.message || "Failed to cancel order",
+          code: error.code,
+        });
+      }
+
+      return res.status(500).json({
+        error: "Internal server error",
+      });
+    }
+  }
+);
+
+/**
+ * POST /api/shifts/:id/refund-address
+ * Set or update refund address for a shift
+ */
+router.post(
+  "/:id/refund-address",
+  authenticateToken,
+  rateLimitConfig.strict,
+  async (req, res) => {
+    try {
+      const { id: shiftId } = req.params;
+      const { address, memo } = req.body;
+      const userId = (req as any).userId;
+      const clientIp = (req as any).clientIp;
+
+      if (!address) {
+        return res.status(400).json({ error: "address is required" });
+      }
+
+      // Verify the shift belongs to the user
+      const shiftJob = store.getShiftJob(shiftId);
+      if (!shiftJob) {
+        return res.status(404).json({ error: "Shift not found" });
+      }
+
+      if (shiftJob.userId !== userId) {
+        return res
+          .status(403)
+          .json({ error: "Not authorized to update this shift" });
+      }
+
+      // Call SideShift API to set refund address
+      const updatedShift = await sideshift.setRefundAddress(
+        shiftId,
+        address,
+        memo,
+        clientIp
+      );
+
+      // Update our records
+      shiftJob.refundAddress = address;
+      if (memo) {
+        shiftJob.refundMemo = memo;
+      }
+      shiftJob.updatedAt = new Date().toISOString();
+
+      logger.info({ shiftId, userId, address }, "Refund address updated");
+
+      return res.json({
+        success: true,
+        shift: updatedShift,
+        shiftJob,
+      });
+    } catch (error: any) {
+      logger.error(
+        { error, shiftId: req.params.id },
+        "Failed to set refund address"
+      );
+
+      if (error.status && error.status < 500) {
+        return res.status(error.status).json({
+          error: error.message || "Failed to set refund address",
+          code: error.code,
+        });
+      }
+
+      return res.status(500).json({
+        error: "Internal server error",
+      });
+    }
+  }
+);
 
 export default router;
