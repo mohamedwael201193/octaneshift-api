@@ -1,10 +1,10 @@
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
-import toast from 'react-hot-toast';
-import { FaArrowDown, FaSpinner } from 'react-icons/fa';
-import octaneAPI from '../services/api';
-import { SUPPORTED_CHAINS, DEPOSIT_TOKENS } from '../config/chains';
+import { useQuery } from "@tanstack/react-query";
+import { motion } from "framer-motion";
+import { useState } from "react";
+import toast from "react-hot-toast";
+import { FaArrowDown, FaSpinner } from "react-icons/fa";
+import { DEPOSIT_TOKENS, SUPPORTED_CHAINS } from "../config/chains";
+import octaneAPI from "../services/api";
 
 interface OrderDetails {
   shiftId: string;
@@ -13,53 +13,81 @@ interface OrderDetails {
   depositCoin: string;
 }
 
-export default function SwapInterface() {
-  const [fromToken, setFromToken] = useState('usdt-ethereum');
-  const [toChain, setToChain] = useState('eth-base');
-  const [amount, setAmount] = useState('10');
-  const [settleAddress, setSettleAddress] = useState('');
+interface SwapInterfaceProps {
+  prefilledChain?: string;
+  prefilledAmount?: string;
+  prefilledAddress?: string;
+}
+
+export default function SwapInterface({
+  prefilledChain,
+  prefilledAmount,
+  prefilledAddress,
+}: SwapInterfaceProps = {}) {
+  // Map chain names to toChain format (e.g., 'base' -> 'eth-base')
+  const getToChainFromName = (chainName?: string) => {
+    if (!chainName) return "eth-base";
+    const mapping: Record<string, string> = {
+      ethereum: "eth-ethereum",
+      base: "eth-base",
+      arbitrum: "eth-arbitrum",
+      optimism: "eth-optimism",
+      polygon: "matic-polygon",
+      avalanche: "avax-avalanche",
+    };
+    return mapping[chainName.toLowerCase()] || "eth-base";
+  };
+
+  const [fromToken, setFromToken] = useState("usdt-ethereum");
+  const [toChain, setToChain] = useState(getToChainFromName(prefilledChain));
+  const [amount, setAmount] = useState(prefilledAmount || "10");
+  const [settleAddress, setSettleAddress] = useState(prefilledAddress || "");
   const [isCreatingShift, setIsCreatingShift] = useState(false);
   const [orderDetails, setOrderDetails] = useState<OrderDetails | null>(null);
 
-  const { data: quote, isLoading: quoteLoading, refetch: refetchQuote } = useQuery({
-    queryKey: ['quote', fromToken, toChain, amount],
+  const {
+    data: quote,
+    isLoading: quoteLoading,
+    refetch: refetchQuote,
+  } = useQuery({
+    queryKey: ["quote", fromToken, toChain, amount],
     queryFn: () => octaneAPI.getQuote(fromToken, toChain, amount),
     enabled: !!fromToken && !!toChain && !!amount && parseFloat(amount) > 0,
-    retry: false
+    retry: false,
   });
 
   const handleGetQuote = async () => {
     if (!amount || parseFloat(amount) <= 0) {
-      toast.error('Please enter a valid amount');
+      toast.error("Please enter a valid amount");
       return;
     }
     await refetchQuote();
-    toast.success('Quote updated!');
+    toast.success("Quote updated!");
   };
 
   const handleCreateShift = async () => {
     if (!settleAddress) {
-      toast.error('Please enter your wallet address');
+      toast.error("Please enter your wallet address");
       return;
     }
 
     if (!quote?.data) {
-      toast.error('Please get a quote first');
+      toast.error("Please get a quote first");
       return;
     }
 
     setIsCreatingShift(true);
 
     try {
-      const [depositCoin, depositNetwork] = fromToken.split('-');
-      const [settleCoin, settleNetwork] = toChain.split('-');
+      const [depositCoin, depositNetwork] = fromToken.split("-");
+      const [settleCoin, settleNetwork] = toChain.split("-");
 
       const shiftData = {
         depositCoin: depositCoin.toUpperCase(),
         depositNetwork,
         settleCoin: settleCoin.toUpperCase(),
         settleNetwork,
-        settleAddress
+        settleAddress,
       };
 
       const result = await octaneAPI.createShift(shiftData);
@@ -69,15 +97,16 @@ export default function SwapInterface() {
         shiftId: shift.id,
         depositAddress: shift.depositAddress,
         depositAmount: amount,
-        depositCoin: depositCoin.toUpperCase()
+        depositCoin: depositCoin.toUpperCase(),
       });
 
-      toast.success('Order created successfully!');
+      toast.success("Order created successfully!");
 
       setTimeout(() => {
-        document.getElementById('order-details')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        document
+          .getElementById("order-details")
+          ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
       }, 100);
-
     } catch (error: any) {
       console.error(error);
     } finally {
@@ -86,7 +115,10 @@ export default function SwapInterface() {
   };
 
   return (
-    <div id="swap-section" className="py-24 px-4 bg-gradient-to-b from-black to-gray-900">
+    <div
+      id="swap-section"
+      className="py-24 px-4 bg-gradient-to-b from-black to-gray-900"
+    >
       <div className="max-w-2xl mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -107,16 +139,22 @@ export default function SwapInterface() {
           className="bg-gray-800/50 backdrop-blur-xl rounded-3xl p-8 border border-gray-700 shadow-2xl"
         >
           <div className="mb-6">
-            <label className="block text-sm font-semibold mb-3 text-gray-300">From</label>
+            <label className="block text-sm font-semibold mb-3 text-gray-300">
+              From
+            </label>
             <select
               value={fromToken}
               onChange={(e) => setFromToken(e.target.value)}
               className="w-full bg-gray-900/70 border border-gray-600 rounded-xl px-4 py-4 text-white focus:outline-none focus:ring-2 focus:ring-green-500 transition-all"
             >
-              {DEPOSIT_TOKENS.map(token =>
-                token.networks.map(network => (
-                  <option key={`${token.symbol}-${network}`} value={`${token.symbol.toLowerCase()}-${network}`}>
-                    {token.symbol} on {network.charAt(0).toUpperCase() + network.slice(1)}
+              {DEPOSIT_TOKENS.map((token) =>
+                token.networks.map((network) => (
+                  <option
+                    key={`${token.symbol}-${network}`}
+                    value={`${token.symbol.toLowerCase()}-${network}`}
+                  >
+                    {token.symbol} on{" "}
+                    {network.charAt(0).toUpperCase() + network.slice(1)}
                   </option>
                 ))
               )}
@@ -141,13 +179,15 @@ export default function SwapInterface() {
           </div>
 
           <div className="mb-6">
-            <label className="block text-sm font-semibold mb-3 text-gray-300">To</label>
+            <label className="block text-sm font-semibold mb-3 text-gray-300">
+              To
+            </label>
             <select
               value={toChain}
               onChange={(e) => setToChain(e.target.value)}
               className="w-full bg-gray-900/70 border border-gray-600 rounded-xl px-4 py-4 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
             >
-              {SUPPORTED_CHAINS.map(chain => (
+              {SUPPORTED_CHAINS.map((chain) => (
                 <option key={chain.apiCode} value={chain.apiCode}>
                   {chain.symbol} on {chain.name}
                 </option>
@@ -165,22 +205,30 @@ export default function SwapInterface() {
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-400">Rate:</span>
-                  <span className="text-white font-semibold">{quote.data.rate || 'Variable'}</span>
+                  <span className="text-white font-semibold">
+                    {quote.data.rate || "Variable"}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">Min:</span>
-                  <span className="text-white font-semibold">{quote.data.min}</span>
+                  <span className="text-white font-semibold">
+                    {quote.data.min}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">Max:</span>
-                  <span className="text-white font-semibold">{quote.data.max}</span>
+                  <span className="text-white font-semibold">
+                    {quote.data.max}
+                  </span>
                 </div>
               </div>
             </motion.div>
           )}
 
           <div className="mb-6">
-            <label className="block text-sm font-semibold mb-3 text-gray-300">Your Wallet Address</label>
+            <label className="block text-sm font-semibold mb-3 text-gray-300">
+              Your Wallet Address
+            </label>
             <input
               type="text"
               value={settleAddress}
@@ -199,18 +247,31 @@ export default function SwapInterface() {
               className="flex-1 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-4 px-6 rounded-xl transition-all shadow-lg hover:shadow-purple-500/50 flex items-center justify-center gap-2"
             >
               {quoteLoading && <FaSpinner className="animate-spin" />}
-              {orderDetails ? 'Order Active' : quoteLoading ? 'Loading...' : 'Get Quote'}
+              {orderDetails
+                ? "Order Active"
+                : quoteLoading
+                ? "Loading..."
+                : "Get Quote"}
             </motion.button>
 
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={handleCreateShift}
-              disabled={!quote?.data || !settleAddress || isCreatingShift || orderDetails !== null}
+              disabled={
+                !quote?.data ||
+                !settleAddress ||
+                isCreatingShift ||
+                orderDetails !== null
+              }
               className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-4 px-6 rounded-xl transition-all shadow-lg hover:shadow-green-500/50 flex items-center justify-center gap-2"
             >
               {isCreatingShift && <FaSpinner className="animate-spin" />}
-              {orderDetails ? 'Order Active' : isCreatingShift ? 'Creating...' : 'Create Order'}
+              {orderDetails
+                ? "Order Active"
+                : isCreatingShift
+                ? "Creating..."
+                : "Create Order"}
             </motion.button>
           </div>
 
@@ -222,7 +283,9 @@ export default function SwapInterface() {
               className="mt-6 p-6 bg-green-900/20 border border-green-500/50 rounded-2xl"
             >
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-bold text-green-400">✅ Order Created Successfully!</h3>
+                <h3 className="text-lg font-bold text-green-400">
+                  ✅ Order Created Successfully!
+                </h3>
                 <button
                   onClick={() => setOrderDetails(null)}
                   className="text-gray-400 hover:text-white text-xl w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-700 transition-colors"
@@ -232,13 +295,17 @@ export default function SwapInterface() {
               </div>
 
               <div className="mb-4 p-3 bg-gray-900/50 rounded-lg">
-                <p className="text-sm text-gray-400 mb-1">Shift ID (for tracking):</p>
+                <p className="text-sm text-gray-400 mb-1">
+                  Shift ID (for tracking):
+                </p>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <code className="text-green-400 font-mono text-sm break-all">{orderDetails.shiftId}</code>
+                  <code className="text-green-400 font-mono text-sm break-all">
+                    {orderDetails.shiftId}
+                  </code>
                   <button
                     onClick={() => {
                       navigator.clipboard.writeText(orderDetails.shiftId);
-                      toast.success('Shift ID copied!');
+                      toast.success("Shift ID copied!");
                     }}
                     className="px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 rounded transition-colors whitespace-nowrap"
                   >
@@ -249,7 +316,11 @@ export default function SwapInterface() {
 
               <div className="p-4 bg-gray-900/50 rounded-lg mb-4">
                 <p className="text-sm text-gray-400 mb-3">
-                  Send exactly <span className="text-white font-bold">{orderDetails.depositAmount} {orderDetails.depositCoin}</span> to:
+                  Send exactly{" "}
+                  <span className="text-white font-bold">
+                    {orderDetails.depositAmount} {orderDetails.depositCoin}
+                  </span>{" "}
+                  to:
                 </p>
                 <div className="bg-gray-800 p-3 rounded-lg mb-3">
                   <code className="text-sm font-mono text-blue-400 break-all block">
@@ -259,7 +330,7 @@ export default function SwapInterface() {
                 <button
                   onClick={() => {
                     navigator.clipboard.writeText(orderDetails.depositAddress);
-                    toast.success('Address copied!');
+                    toast.success("Address copied!");
                   }}
                   className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors"
                 >
@@ -270,9 +341,10 @@ export default function SwapInterface() {
               <div className="flex gap-3 mb-4">
                 <button
                   onClick={() => {
-                    const trackerSection = document.getElementById('tracker-section');
+                    const trackerSection =
+                      document.getElementById("tracker-section");
                     if (trackerSection) {
-                      trackerSection.scrollIntoView({ behavior: 'smooth' });
+                      trackerSection.scrollIntoView({ behavior: "smooth" });
                     }
                   }}
                   className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-medium transition-colors"
@@ -282,8 +354,8 @@ export default function SwapInterface() {
                 <button
                   onClick={() => {
                     setOrderDetails(null);
-                    setSettleAddress('');
-                    setAmount('10');
+                    setSettleAddress("");
+                    setAmount("10");
                   }}
                   className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg font-medium transition-colors"
                 >
@@ -293,7 +365,8 @@ export default function SwapInterface() {
 
               <div className="p-3 bg-yellow-900/20 border border-yellow-500/30 rounded-lg">
                 <p className="text-xs text-yellow-400">
-                  ⏱️ Please send funds within 10 minutes. You can track the status anytime using the Shift ID.
+                  ⏱️ Please send funds within 10 minutes. You can track the
+                  status anytime using the Shift ID.
                 </p>
               </div>
             </motion.div>

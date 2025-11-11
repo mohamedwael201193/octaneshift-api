@@ -15,6 +15,7 @@ import GiftCreate from "./pages/GiftCreate";
 import GiftReceive from "./pages/GiftReceive";
 import Presets from "./pages/Presets";
 import Status from "./pages/Status";
+import TopUp from "./pages/TopUp";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -73,6 +74,7 @@ function App() {
             {/* Wave 2 Features */}
             <Route path="/r" element={<DeepLink />} />
             <Route path="/deeplink" element={<DeepLink />} />
+            <Route path="/topup" element={<TopUp />} />
             <Route path="/status" element={<Status />} />
             <Route path="/batch" element={<BatchTopUp />} />
             <Route path="/gift/create" element={<GiftCreate />} />
