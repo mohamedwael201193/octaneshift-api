@@ -11,7 +11,9 @@ import { extractClientIP } from "./middleware/ip";
 import { rateLimitConfig } from "./middleware/rateLimit";
 import { addSecurityHeaders, sanitizeInput } from "./middleware/security";
 import adminRoutes from "./routes/admin";
+import checkoutRoutes from "./routes/checkout";
 import metaRoutes from "./routes/meta";
+import notificationsRoutes from "./routes/notifications";
 import presetsRoutes from "./routes/presets";
 import shiftsRoutes from "./routes/shifts";
 import sideshiftRoutes from "./routes/sideshift";
@@ -22,6 +24,7 @@ import watchlistsRoutes from "./routes/watchlists";
 import webhooksRoutes from "./routes/webhooks";
 import * as backgroundJobs from "./services/backgroundJobs";
 import * as monitor from "./services/monitor";
+import * as notificationService from "./services/notifications";
 import * as store from "./store/store";
 import { logger } from "./utils/logger";
 
@@ -48,13 +51,17 @@ async function initializeBot() {
 
     if (telegramBotService) {
       await telegramBotService.initialize();
+      // Configure notification service with bot reference
+      notificationService.setBotService(telegramBotService);
       logger.info("✅ Telegram bot initialized successfully");
     } else {
       logger.warn("⚠️ Telegram bot is disabled");
+      notificationService.setBotService(null);
     }
   } catch (error) {
     console.error("❌ Failed to initialize Telegram bot:", error);
     logger.error({ error }, "❌ Failed to initialize Telegram bot");
+    notificationService.setBotService(null);
   }
 }
 
@@ -498,6 +505,8 @@ if (process.env.NODE_ENV === "development") {
 app.use("/api/meta", metaRoutes);
 app.use("/api", sideshiftRoutes);
 app.use("/api/shifts", shiftsRoutes);
+app.use("/api/checkout", checkoutRoutes);
+app.use("/api/notifications", notificationsRoutes);
 app.use("/api/stats", statsRoutes);
 app.use("/api/topup", topupRoutes);
 app.use("/api/presets", presetsRoutes);

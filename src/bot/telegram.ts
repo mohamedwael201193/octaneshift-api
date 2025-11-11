@@ -169,6 +169,23 @@ export class TelegramBotService {
     }
   }
 
+  /**
+   * Send a notification message to a user by their Telegram chat ID
+   */
+  public async sendNotification(
+    chatId: number,
+    message: string,
+    options?: { parse_mode?: "Markdown" | "HTML" }
+  ): Promise<void> {
+    try {
+      await this.bot.telegram.sendMessage(chatId, message, options);
+      logger.info({ chatId }, "Notification sent to user");
+    } catch (error) {
+      logger.error({ error, chatId }, "Failed to send notification to user");
+      throw error;
+    }
+  }
+
   public handleUpdate(update: Update): void {
     try {
       this.bot.handleUpdate(update);
@@ -353,6 +370,11 @@ export class TelegramBotService {
       await this.handleCancelOrder(ctx, shiftId);
     });
 
+    // Notifications command
+    this.bot.command("notifications", async (ctx): Promise<void> => {
+      await this.handleNotifications(ctx);
+    });
+
     // Handle callback queries
     this.bot.on("callback_query", async (ctx) => {
       const callbackQuery = ctx.callbackQuery;
@@ -452,6 +474,16 @@ export class TelegramBotService {
               );
               return;
 
+            case "notifications":
+              await ctx.answerCbQuery();
+              await this.handleNotifications(ctx);
+              return;
+
+            case "create_shift":
+              await ctx.answerCbQuery();
+              await this.handleCreateShiftMenu(ctx);
+              return;
+
             case "supported_chains":
               await ctx.answerCbQuery();
               await ctx.reply(
@@ -517,6 +549,142 @@ export class TelegramBotService {
                   "✅ No registration required",
                 { parse_mode: "Markdown" }
               );
+              return;
+
+            case "shift_fixed":
+              await ctx.answerCbQuery();
+              await ctx.reply(
+                "🔀 *Fixed Shift*\n\n" +
+                  "Select deposit coin for your fixed shift:",
+                {
+                  parse_mode: "Markdown",
+                  reply_markup: {
+                    inline_keyboard: [
+                      [
+                        {
+                          text: "💵 USDC",
+                          callback_data: "deposit:usdc:mainnet:fixed",
+                        },
+                        {
+                          text: "💵 USDT",
+                          callback_data: "deposit:usdt:mainnet:fixed",
+                        },
+                      ],
+                      [
+                        {
+                          text: "🔍 Search All Coins",
+                          callback_data: "search:deposit:fixed",
+                        },
+                        {
+                          text: "📄 Browse All",
+                          callback_data: "browse:deposit:fixed",
+                        },
+                      ],
+                      [{ text: "🔙 Back", callback_data: "create_shift" }],
+                    ],
+                  },
+                }
+              );
+              return;
+
+            case "shift_variable":
+              await ctx.answerCbQuery();
+              await ctx.reply(
+                "🔄 *Variable Shift*\n\n" +
+                  "Select deposit coin for your variable shift:",
+                {
+                  parse_mode: "Markdown",
+                  reply_markup: {
+                    inline_keyboard: [
+                      [
+                        {
+                          text: "💵 USDC",
+                          callback_data: "deposit:usdc:mainnet:variable",
+                        },
+                        {
+                          text: "💵 USDT",
+                          callback_data: "deposit:usdt:mainnet:variable",
+                        },
+                      ],
+                      [
+                        {
+                          text: "🔍 Search All Coins",
+                          callback_data: "search:deposit:variable",
+                        },
+                        {
+                          text: "📄 Browse All",
+                          callback_data: "browse:deposit:variable",
+                        },
+                      ],
+                      [{ text: "🔙 Back", callback_data: "create_shift" }],
+                    ],
+                  },
+                }
+              );
+              return;
+
+            case "shift_info":
+              await ctx.answerCbQuery();
+              await ctx.reply(
+                "💡 *Fixed vs Variable Shifts*\n\n" +
+                  "**🔀 Fixed Shift:**\n" +
+                  "✓ Rate locked at creation\n" +
+                  "✓ Know exact receive amount\n" +
+                  "✓ Must deposit exact amount\n" +
+                  "✓ Best for precise transactions\n\n" +
+                  "**🔄 Variable Shift:**\n" +
+                  "✓ Rate determined at deposit\n" +
+                  "✓ Flexible deposit amount\n" +
+                  "✓ Deposit within min/max range\n" +
+                  "✓ Best for approximate amounts\n\n" +
+                  "Both are processed instantly by SideShift!",
+                { parse_mode: "Markdown" }
+              );
+              return;
+
+            case "mark_all_read":
+              await ctx.answerCbQuery("All notifications marked as read");
+              await ctx.reply(
+                "✅ All notifications have been marked as read!",
+                {
+                  reply_markup: {
+                    inline_keyboard: [
+                      [{ text: "🏠 Main Menu", callback_data: "main_menu" }],
+                    ],
+                  },
+                }
+              );
+              return;
+
+            case "main_menu":
+              await ctx.answerCbQuery();
+              // Trigger the start command again
+              const keyboard = {
+                inline_keyboard: [
+                  [
+                    { text: "⛽ Quick Top-up", callback_data: "quick_topup" },
+                    { text: "📊 My Shifts", callback_data: "my_shifts" },
+                  ],
+                  [
+                    {
+                      text: "🔔 Notifications",
+                      callback_data: "notifications",
+                    },
+                    { text: "💱 Create Shift", callback_data: "create_shift" },
+                  ],
+                  [
+                    { text: "💡 How it Works", callback_data: "how_it_works" },
+                    {
+                      text: "🔗 Supported Chains",
+                      callback_data: "supported_chains",
+                    },
+                  ],
+                ],
+              };
+              await ctx.reply("🏠 *Main Menu*\n\nChoose an option:", {
+                parse_mode: "Markdown",
+                reply_markup: keyboard,
+              });
               return;
 
             default:
@@ -808,6 +976,99 @@ export class TelegramBotService {
         { error, shiftId, userId: ctx.from?.id },
         "Failed to cancel order via bot"
       );
+    }
+  }
+
+  /**
+   * Handle notifications view
+   */
+  private async handleNotifications(ctx: BotContext): Promise<void> {
+    try {
+      const userId = ctx.from?.id;
+      if (!userId) {
+        await ctx.reply("❌ Could not identify user.");
+        return;
+      }
+
+      // Register user's telegram chat ID for future notifications
+      const notificationService = await import("../services/notifications");
+      notificationService.registerTelegramUser(userId.toString(), ctx.chat!.id);
+
+      await ctx.reply("🔍 *Checking notifications...*", {
+        parse_mode: "Markdown",
+      });
+
+      // Fetch notifications from API (would need actual implementation)
+      const keyboard = {
+        inline_keyboard: [
+          [
+            { text: "🔄 Refresh", callback_data: "notifications" },
+            { text: "✅ Mark All Read", callback_data: "mark_all_read" },
+          ],
+          [{ text: "🏠 Main Menu", callback_data: "main_menu" }],
+        ],
+      };
+
+      await ctx.reply(
+        "🔔 *Your Notifications*\n\n" +
+          "You'll receive real-time notifications here when:\n\n" +
+          "💸 Your shift is refunded\n" +
+          "⏰ Your shift expires\n" +
+          "✅ Your shift is completed\n" +
+          "⚠️ There's an issue with your shift\n\n" +
+          "_Notifications are enabled for this chat!_",
+        {
+          parse_mode: "Markdown",
+          reply_markup: keyboard,
+        }
+      );
+
+      logger.info({ userId }, "User viewed notifications");
+    } catch (error) {
+      logger.error(
+        { error, userId: ctx.from?.id },
+        "Error handling notifications"
+      );
+      await ctx.reply("❌ Error loading notifications. Please try again.");
+    }
+  }
+
+  /**
+   * Handle create shift menu
+   */
+  private async handleCreateShiftMenu(ctx: BotContext): Promise<void> {
+    try {
+      const keyboard = {
+        inline_keyboard: [
+          [{ text: "⛽ Quick Gas Top-up", callback_data: "quick_topup" }],
+          [
+            { text: "🔀 Fixed Shift", callback_data: "shift_fixed" },
+            { text: "🔄 Variable Shift", callback_data: "shift_variable" },
+          ],
+          [{ text: "💡 What's the difference?", callback_data: "shift_info" }],
+          [{ text: "❌ Cancel", callback_data: "cancel_action" }],
+        ],
+      };
+
+      await ctx.reply(
+        "💱 *Create New Shift*\n\n" +
+          "Choose your shift type:\n\n" +
+          "⛽ **Quick Gas Top-up** - Fast gas refills for common chains\n\n" +
+          "🔀 **Fixed Shift** - You know exactly how much you'll receive\n" +
+          "   • Fixed rate guaranteed\n" +
+          "   • Must deposit exact amount\n\n" +
+          "🔄 **Variable Shift** - Flexible deposit amount\n" +
+          "   • Rate determined at deposit time\n" +
+          "   • Deposit any amount within range\n\n" +
+          "Select an option below:",
+        {
+          parse_mode: "Markdown",
+          reply_markup: keyboard,
+        }
+      );
+    } catch (error) {
+      logger.error({ error }, "Error showing create shift menu");
+      await ctx.reply("❌ Error loading shift menu. Please try again.");
     }
   }
 
