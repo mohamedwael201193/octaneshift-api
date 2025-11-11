@@ -212,7 +212,11 @@ export class TelegramBotService {
             { text: "📊 My Shifts", callback_data: "my_shifts" },
           ],
           [
-            { text: "💡 How it Works", callback_data: "how_it_works" },
+            { text: "� Notifications", callback_data: "notifications" },
+            { text: "💱 Create Shift", callback_data: "create_shift" },
+          ],
+          [
+            { text: "�💡 How it Works", callback_data: "how_it_works" },
             { text: "🔗 Supported Chains", callback_data: "supported_chains" },
           ],
           ...(isDev
@@ -226,11 +230,18 @@ export class TelegramBotService {
           `🚀 *OctaneShift* helps you get native gas tokens across multiple blockchain networks instantly.\n\n` +
           `*Quick Start:*\n` +
           `• Tap *Quick Top-up* below to start\n` +
-          `• Or use: \`/topup <chain> <amount>\`\n\n` +
-          `*Available Commands:*\n` +
+          `• Or create a custom shift with any coins\n\n` +
+          `*Main Features:*\n` +
+          `⛽ Quick gas top-ups (ETH, Base, Arbitrum, etc.)\n` +
+          `💱 Swap any supported crypto instantly\n` +
+          `🔔 Real-time notifications for your shifts\n` +
+          `❌ Cancel shifts (after 5 minutes)\n\n` +
+          `*Quick Commands:*\n` +
           `• \`/topup base 0.01\` - Top up gas\n` +
-          `• \`/shifts\` - View your recent shifts\n` +
+          `• \`/shifts\` - View your shifts\n` +
           `• \`/status <id>\` - Check shift status\n` +
+          `• \`/cancel_order <id>\` - Cancel a shift\n` +
+          `• \`/notifications\` - View notifications\n` +
           `${
             isDev
               ? "• `/test` - Bot diagnostics\n• `/ping` - Test response\n"
