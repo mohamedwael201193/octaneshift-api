@@ -30,6 +30,12 @@ export interface Alert {
   level: "low" | "critical";
   deepLink: string;
   sentAt: string;
+  type?: string;
+  balance?: string;
+  threshold?: string;
+  message?: string;
+  chain?: string;
+  address?: string;
 }
 
 export interface ShiftJob {
@@ -61,6 +67,7 @@ export interface ShiftJob {
   settleAmount?: string;
   expiresAt: string;
   txHash?: string;
+  payoutId?: string;
 }
 
 export interface Preset {
@@ -313,6 +320,10 @@ export function getAllAlerts(): Alert[] {
   return [...store.alerts];
 }
 
+// Aliases for convenience
+export const getAlertById = getAlert;
+export const getUserAlerts = getAlertsByUserId;
+
 // ============================================
 // SHIFT JOB CRUD
 // ============================================
@@ -343,6 +354,10 @@ export function getShiftJobsByUserId(userId: string): ShiftJob[] {
 
 export function getShiftJobsByWatchlistId(watchlistId: string): ShiftJob[] {
   return store.shiftJobs.filter((j) => j.watchlistId === watchlistId);
+}
+
+export function getShiftJobsByPayoutId(payoutId: string): ShiftJob[] {
+  return store.shiftJobs.filter((j) => j.payoutId === payoutId);
 }
 
 export function getAllShiftJobs(): ShiftJob[] {

@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { createTelegramBot } from "../bot/telegram";
 import * as chains from "../lib/chains";
 import * as store from "../store/store";
 import { logger } from "../utils/logger";
@@ -111,6 +112,145 @@ export function verifyDeepLink(url: string): boolean {
 }
 
 // ============================================
+// TELEGRAM ALERT SENDING
+// ============================================
+
+/**
+ * Send Telegram alert with deep link button
+ */
+async function sendTelegramAlert(
+  user: store.User,
+  alert: store.Alert,
+  watchlist: store.Watchlist,
+  formattedBalance: string
+): Promise<void> {
+  try {
+    const bot = createTelegramBot();
+    if (!bot || !user.tgChatId) {
+      return;
+    }
+
+    const emoji = alert.level === "critical" ? "🚨" : "⚠️";
+    const chainConfig = chains.getChainConfig(watchlist.chain);
+
+    // Calculate suggested amounts based on typical transaction costs
+    const txCostEstimate = getSuggestedTopUpAmount(watchlist.chain);
+    const suggestedAmounts = {
+      oneTx: txCostEstimate,
+      fiveTx: (txCostEstimate * 5).toFixed(4),
+      oneDay: (txCostEstimate * 20).toFixed(4),
+    };
+
+    const message = `${emoji} *Low Gas Alert*
+
+*Chain:* ${watchlist.chain.toUpperCase()}
+*Address:* \`${watchlist.address.substring(
+      0,
+      10
+    )}...${watchlist.address.substring(38)}\`
+
+*Current Balance:* ${formattedBalance} ${chainConfig.nativeCurrency.symbol}
+*Threshold:* ${watchlist.thresholdNative} ${chainConfig.nativeCurrency.symbol}
+
+Your gas balance is running low! Top up now to avoid transaction failures.`;
+
+    // Build deep link with suggested amounts
+    const frontendUrl = process.env.PUBLIC_APP_URL || "https://octaneshift.app";
+
+    // Generate new deep link token for Telegram button
+    const expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
+    const jwtSecret = process.env.JWT_SECRET || "";
+
+    const tokenData = {
+      alertId: alert.id,
+      chain: watchlist.chain,
+      address: watchlist.address,
+      settleAmount: watchlist.thresholdNative,
+      expiresAt,
+    };
+
+    const payload = `${tokenData.alertId}:${tokenData.chain}:${tokenData.address}:${tokenData.settleAmount}:${expiresAt}`;
+    const signature = crypto
+      .createHmac("sha256", jwtSecret)
+      .update(payload)
+      .digest("hex");
+
+    const fullTokenData = { ...tokenData, signature };
+    const token = Buffer.from(JSON.stringify(fullTokenData)).toString("base64");
+    const deepLink = `${frontendUrl}/r?token=${token}`;
+
+    // Access bot instance to send message
+    const botInstance = (bot as any).bot;
+    await botInstance.telegram.sendMessage(user.tgChatId, message, {
+      parse_mode: "Markdown",
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: `🚀 Top Up Now`,
+              url: deepLink,
+            },
+          ],
+          [
+            {
+              text: `+1 TX (${suggestedAmounts.oneTx})`,
+              url: `${deepLink}&amount=${suggestedAmounts.oneTx}`,
+            },
+            {
+              text: `+5 TX (${suggestedAmounts.fiveTx})`,
+              url: `${deepLink}&amount=${suggestedAmounts.fiveTx}`,
+            },
+          ],
+          [
+            {
+              text: `+1 Day (${suggestedAmounts.oneDay})`,
+              url: `${deepLink}&amount=${suggestedAmounts.oneDay}`,
+            },
+          ],
+        ],
+      },
+    });
+
+    logger.info(
+      {
+        alertId: alert.id,
+        userId: user.id,
+        tgChatId: user.tgChatId,
+        chain: watchlist.chain,
+      },
+      "Telegram alert sent"
+    );
+  } catch (error) {
+    logger.error(
+      { error, userId: user.id, alertId: alert.id },
+      "Failed to send Telegram alert"
+    );
+  }
+}
+
+/**
+ * Get suggested top-up amount based on chain's typical gas costs
+ */
+function getSuggestedTopUpAmount(chain: string): number {
+  const suggestions: Record<string, number> = {
+    ethereum: 0.005,
+    base: 0.0005,
+    optimism: 0.001,
+    arbitrum: 0.001,
+    polygon: 0.05,
+    avalanche: 0.05,
+    bsc: 0.002,
+    fantom: 0.5,
+    gnosis: 0.01,
+    linea: 0.001,
+    scroll: 0.001,
+    zksync: 0.001,
+  };
+
+  return suggestions[chain.toLowerCase()] || 0.001;
+}
+
+// ============================================
 // ALERT GENERATION
 // ============================================
 
@@ -180,6 +320,11 @@ async function generateAlert(
     store.updateWatchlist(watchlist.id, {
       lastAlertAt: alert.sentAt,
     });
+
+    // Send Telegram alert if user has Telegram ID
+    if (user.tgChatId) {
+      await sendTelegramAlert(user, alert, watchlist, formattedBalance);
+    }
 
     return alert;
   } catch (error) {

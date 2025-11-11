@@ -283,3 +283,62 @@ export function validateIPQuality(
   logger.debug({ ip }, "IP quality check passed");
   next();
 }
+
+/**
+ * Compliance middleware
+ * Checks SideShift permissions for user's IP and enforces regional restrictions
+ * Returns 451 Unavailable For Legal Reasons with simulate:true for restricted regions
+ */
+export async function checkCompliance(
+  req: any,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const userIp = req.clientIP || req.ip;
+
+    if (!userIp) {
+      logger.warn("No IP address available for compliance check");
+      return next();
+    }
+
+    // Import SideShift client dynamically to avoid circular dependencies
+    const { default: sideshift } = await import("../lib/sideshift");
+
+    try {
+      // Call SideShift permissions endpoint
+      const permissions = await sideshift.getPermissions(userIp);
+
+      // Check if user has required permissions
+      if (!permissions.createShift || !permissions.requestQuote) {
+        logger.warn(
+          { userIp, permissions },
+          "User from restricted region, enabling simulator mode"
+        );
+
+        // Set simulator flag on request for downstream handlers
+        req.simulatorMode = true;
+
+        // Return 451 with simulator mode enabled
+        res.status(451).json({
+          success: false,
+          error: "Service unavailable in your region",
+          simulate: true,
+          message:
+            "Cryptocurrency exchange services are not available in your region. You can use simulator mode to explore the platform.",
+        });
+        return;
+      }
+
+      // User is allowed, continue
+      next();
+    } catch (error: any) {
+      // If permissions check fails, log and allow (fail open for availability)
+      logger.error({ error, userIp }, "Failed to check SideShift permissions");
+      next();
+    }
+  } catch (error) {
+    logger.error({ error }, "Compliance middleware error");
+    next();
+  }
+}

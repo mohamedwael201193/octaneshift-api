@@ -3,9 +3,11 @@
  * Endpoints for retrieving and managing user notifications
  */
 
+import crypto from "crypto";
 import { Router } from "express";
 import { authenticateToken } from "../middleware/auth";
 import * as notificationService from "../services/notifications";
+import * as store from "../store/store";
 import { logger } from "../utils/logger";
 
 const router = Router();
@@ -138,6 +140,71 @@ router.delete("/:id", authenticateToken, async (req, res) => {
     return res.status(500).json({
       success: false,
       error: "Failed to delete notification",
+    });
+  }
+});
+
+/**
+ * GET /api/notifications/alerts
+ * Get all alerts with deep links for the authenticated user
+ */
+router.get("/alerts", authenticateToken, async (req: any, res) => {
+  try {
+    const userId = req.user!.id;
+    const alerts = store.getUserAlerts(userId);
+
+    const frontendUrl = process.env.FRONTEND_ORIGIN || "http://localhost:5173";
+    const jwtSecret = process.env.JWT_SECRET;
+
+    if (!jwtSecret) {
+      logger.error("JWT_SECRET not configured");
+      return res.status(500).json({
+        success: false,
+        error: "Server configuration error",
+      });
+    }
+
+    // Add deep link URLs to alerts
+    const alertsWithLinks = alerts.map((alert) => {
+      // Generate deep link token
+      const expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
+      const payload = `${alert.id}:${alert.chain}:${alert.address}:${alert.threshold}:${expiresAt}`;
+
+      const hmac = crypto.createHmac("sha256", jwtSecret);
+      hmac.update(payload);
+      const signature = hmac.digest("hex");
+
+      const tokenData = {
+        alertId: alert.id,
+        chain: alert.chain,
+        address: alert.address,
+        settleAmount: alert.threshold,
+        expiresAt,
+        signature,
+      };
+
+      const token = Buffer.from(JSON.stringify(tokenData)).toString("base64");
+      const deepLink = `${frontendUrl}/r?token=${token}`;
+
+      return {
+        ...alert,
+        deepLink,
+        expiresAt,
+      };
+    });
+
+    return res.json({
+      success: true,
+      data: alertsWithLinks,
+      meta: {
+        total: alertsWithLinks.length,
+      },
+    });
+  } catch (error) {
+    logger.error({ error }, "Failed to get alerts");
+    return res.status(500).json({
+      success: false,
+      error: "Failed to retrieve alerts",
     });
   }
 });
