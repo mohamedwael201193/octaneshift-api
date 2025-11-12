@@ -8,7 +8,7 @@ const router = Router();
  * Send a test watchlist alert to demonstrate monitoring + deep link flow
  * This allows judges to test the entire alert → deep link workflow
  */
-router.post("/", async (req, res) => {
+router.post("/", async (_req, res) => {
   try {
     logger.info("Test alert triggered");
 
