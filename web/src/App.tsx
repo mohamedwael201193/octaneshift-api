@@ -32,7 +32,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <Router>
         <Navigation />
-        <div className="min-h-screen bg-black text-white">
+        <div className="min-h-screen bg-black text-white pt-20">
           <Toaster
             position="top-right"
             toastOptions={{
