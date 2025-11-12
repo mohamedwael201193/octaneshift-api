@@ -1,63 +1,234 @@
-# OctaneShift API
+# 🚀 OctaneShift - Instant Gas Token Service
 
-A robust Node.js TypeScript Express API for OctaneShift cryptocurrency exchange integration.
+**A comprehensive platform for acquiring gas tokens across multiple EVM chains instantly.**
 
-## Features
+[![Live Demo](https://img.shields.io/badge/Live-Demo-blue)](https://octaneshift.vercel.app)
+[![API](https://img.shields.io/badge/API-Live-green)](https://octaneshift-api-1.onrender.com)
+[![Bot](https://img.shields.io/badge/Telegram-Bot-blue)](https://t.me/your_bot_name)
 
-- 🚀 **Express Server** with TypeScript
-- 🛡️ **Security** with Helmet and CORS
-- � **Compliance Gate** with geo-restriction checking
-- 🏛️ **Legal Compliance** returns 451 for restricted regions
-- �📝 **Structured Logging** with Pino and data masking
-- 🔒 **Rate Limiting** with configurable limits
-- ✅ **Runtime Validation** with Zod
-- 🌐 **SideShift Integration** for crypto exchanges
-- 🤖 **Telegram Bot** for notifications
-- 📊 **QR Code Generation** for deposit addresses
-- 🔍 **Client IP Extraction** (proxy-aware)
-- 🚨 **Global Error Handling** with Problem+JSON responses
-- ⚡ **Health Checks** for monitoring
-- 🏗️ **Infrastructure as Code** with Render
+## 📋 Table of Contents
 
-## Quick Start
+- [Overview](#overview)
+- [Wave 2 Features](#wave-2-features)
+- [Architecture](#architecture)
+- [Quick Start](#quick-start)
+- [API Documentation](#api-documentation)
+- [Telegram Bot](#telegram-bot)
+- [Frontend Features](#frontend-features)
+- [Testing Guide](#testing-guide)
+- [Deployment](#deployment)
+- [Environment Variables](#environment-variables)
+
+---
+
+## 🎯 Overview
+
+OctaneShift is a **complete gas token acquisition platform** that evolved from a simple SideShift wrapper (Wave 1) to a full-featured service (Wave 2) with:
+
+- 🌐 **Web Interface**: React + TypeScript frontend with modern UI/UX
+- 🤖 **Telegram Bot**: Full bot integration for mobile-first users
+- ⚡ **Backend API**: Express + TypeScript with SideShift v2 integration
+- � **Real-time Monitoring**: Status dashboard with live metrics
+- 🎁 **Gift System**: Send gas tokens to friends via shareable links
+- 📦 **Batch Processing**: Top up 50 addresses in one operation
+- 🔗 **Deep Links**: Direct navigation from alerts to pre-filled forms
+- 🎚️ **Preset Amounts**: Quick-select common gas amounts
+- 📜 **Proof of Payment**: Blockchain-verifiable transaction proof
+
+### Wave 1 → Wave 2 Evolution
+
+| Feature                | Wave 1                      | Wave 2                          |
+| ---------------------- | --------------------------- | ------------------------------- |
+| **Core Functionality** | Basic SideShift API wrapper | Full platform with 15+ features |
+| **User Interface**     | Single swap form            | 9 pages with navigation         |
+| **Mobile Experience**  | Web only                    | Telegram bot + web              |
+| **Batch Operations**   | ❌                          | ✅ Up to 50 addresses           |
+| **Gifting**            | ❌                          | ✅ Shareable gift links         |
+| **Monitoring**         | ❌                          | ✅ Watchlist + alerts           |
+| **Presets**            | ❌                          | ✅ Quick amount selection       |
+| **Deep Links**         | ❌                          | ✅ Alert → pre-filled form      |
+| **Proof System**       | ❌                          | ✅ Blockchain explorer links    |
+| **Status Dashboard**   | ❌                          | ✅ Real-time metrics            |
+
+---
+
+## 🎁 Wave 2 Features
+
+### 1️⃣ **Preset Quick Amounts**
+
+- Pre-configured gas amounts ($5, $10, $20, $50)
+- One-click selection for common top-up scenarios
+- Visual cards with chain logos and descriptions
+- **Route**: `/presets`
+
+### 2️⃣ **Batch Gas Top-Up**
+
+- Upload CSV with up to 50 addresses
+- Bulk send gas tokens to multiple wallets
+- Progress tracking for each transaction
+- Support for memo/tags (XRP, XLM, EOS)
+- **Route**: `/batch`
+- **Format**: `address,amount,memo` (memo optional)
+
+### 3️⃣ **Gift Cards (Shareable Gas)**
+
+- Create shareable gift links for gas tokens
+- Claim with one click - no wallet needed upfront
+- Perfect for onboarding new users
+- Expires after 7 days
+- **Routes**: `/gift/create`, `/gift/:id`
+
+### 4️⃣ **Deep Links**
+
+- Direct navigation from alerts/messages to pre-filled forms
+- Format: `/deeplink?chain=base&amount=5&address=0x...`
+- Validates parameters before rendering
+- **Route**: `/deeplink`
+
+### 5️⃣ **Notification System**
+
+- Watchlist monitoring for low gas balances
+- Real-time alerts via Telegram
+- Deep link integration for quick top-ups
+- **Backend**: `/api/watchlists/*`
+
+### 6️⃣ **Proof of Payment**
+
+- Detailed transaction proof with blockchain explorer links
+- Shows deposit address, settlement address, amounts, rates
+- Clickable links to Etherscan, Basescan, Polygonscan, etc.
+- **Routes**: `/proof/:shiftId`, `/api/proof/shift/:id`
+
+### 7️⃣ **Status Dashboard**
+
+- Real-time system metrics (uptime, success rate, volume)
+- Top chains and coins analytics
+- Shift breakdown (completed/pending/failed)
+- **Test Alert Button**: Demonstrates watchlist → alert → deep link flow
+- **Route**: `/status`
+
+### 8️⃣ **Telegram Bot Integration**
+
+- Full bot with inline buttons and conversational UI
+- Commands: `/topup`, `/status`, `/shifts`, `/notifications`
+- Supports all features: presets, batch, gifts
+- Mobile-first experience
+- **Webhook**: `/webhook/telegram/:secret`
+
+### 9️⃣ **Memo/Tag Support**
+
+- Automatic detection for coins requiring memos (XRP, XLM, EOS)
+- Conditional field display in swap interface
+- CSV batch support for memos
+- **Implementation**: `SwapInterface.tsx`, `BatchTopUp.tsx`
+
+### 🔟 **Navigation Spacing**
+
+- Clean 80px spacing between nav and content
+- Consistent across all pages
+- Mobile-responsive design
+
+---
+
+## 🏗️ Architecture
+
+```
+┌─────────────────┐      ┌──────────────────┐      ┌─────────────────┐
+│   Frontend      │◄────►│   Backend API    │◄────►│   SideShift API │
+│   (Vercel)      │      │   (Render)       │      │   (External)    │
+│                 │      │                  │      │                 │
+│  React + Vite   │      │  Express + TS    │      │  Crypto Swaps   │
+│  TanStack Query │      │  Zod Validation  │      │  Quote Engine   │
+│  Framer Motion  │      │  Rate Limiting   │      │                 │
+└─────────────────┘      └──────────────────┘      └─────────────────┘
+                                   │
+                                   ▼
+                         ┌──────────────────┐
+                         │  Telegram Bot    │
+                         │  (Webhook)       │
+                         │                  │
+                         │  Commands        │
+                         │  Notifications   │
+                         └──────────────────┘
+```
+
+### Tech Stack
+
+**Backend:**
+
+- Express.js 4.18+ (REST API)
+- TypeScript 5.3+ (Type safety)
+- Zod (Runtime validation)
+- Pino (Structured logging)
+- Undici (HTTP client)
+- Telegraf (Telegram bot framework)
+
+**Frontend:**
+
+- React 18 (UI library)
+- Vite (Build tool)
+- React Router v7 (Navigation)
+- TanStack Query (Data fetching)
+- Framer Motion (Animations)
+- Tailwind CSS (Styling)
+- Lucide React (Icons)
+
+**Infrastructure:**
+
+- Render (Backend hosting)
+- Vercel (Frontend hosting)
+- SideShift API (Crypto swaps)
+- Telegram Bot API (Notifications)
+
+---
+
+## 🚀 Quick Start
 
 ### Prerequisites
 
 - Node.js 20+
 - npm or yarn
+- SideShift API secret
+- Telegram bot token (optional)
 
 ### Installation
 
 ```bash
-# Clone the repository
-git clone <repository-url>
+# Clone repository
+git clone https://github.com/mohamedwael201193/octaneshift-api.git
 cd octaneshift-api
 
-# Install dependencies
+# Install backend dependencies
 npm install
 
-# Set up environment variables
-cp .env.example .env
-# Edit .env with your configuration
+# Install frontend dependencies
+cd web
+npm install
+cd ..
 
-# Development
+# Configure environment
+cp .env.example .env
+# Edit .env with your values
+
+# Start backend (development)
 npm run dev
 
-# Production build
-npm run build
-npm start
+# Start frontend (in separate terminal)
+cd web
+npm run dev
 ```
 
 ### Environment Variables
 
-Create a `.env` file with the following variables:
+Create `.env` file in project root:
 
+````env
 ```env
 # Server Configuration
 PORT=3000
 NODE_ENV=development
-FRONTEND_ORIGIN=http://localhost:5173
-APP_BASE_URL=https://octaneshift-api.onrender.com
+FRONTEND_ORIGIN=http://localhost:5173,https://octaneshift.vercel.app
+APP_BASE_URL=https://octaneshift-api-1.onrender.com
 
 # SideShift Configuration
 SIDESHIFT_SECRET=your_sideshift_secret
@@ -65,329 +236,854 @@ AFFILIATE_ID=your_affiliate_id
 COMMISSION_RATE=0
 
 # Compliance & Demo Mode
-DEMO_MODE=false.0
+DEMO_MODE=false
 
-# Telegram Bot Configuration
+# Telegram Bot Configuration (Optional)
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 TELEGRAM_ADMIN_CHAT_ID=your_admin_chat_id
 TELEGRAM_WEBHOOK_SECRET=your_webhook_secret
 
 # Logging
 LOG_LEVEL=info
+````
+
+---
+
+## 📡 API Documentation
+
+### Base URL
+
+- **Production**: `https://octaneshift-api-1.onrender.com`
+- **Development**: `http://localhost:3000`
+
+### Core Endpoints
+
+#### Health Check
+
+```http
+GET /health
 ```
 
-## Telegram Bot Setup
+Response:
 
-The API includes automatic Telegram webhook setup on server start. Here's how to configure it:
-
-### 1. Create a Telegram Bot
-
-1. Message [@BotFather](https://t.me/BotFather) on Telegram
-2. Use `/newbot` command and follow instructions
-3. Copy the bot token (format: `123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11`)
-
-### 2. Get Your Admin Chat ID
-
-1. Message your bot or add it to a group
-2. Visit `https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates`
-3. Find the `chat.id` from the response
-4. Use this as `TELEGRAM_ADMIN_CHAT_ID`
-
-### 3. Set Environment Variables
-
-```env
-TELEGRAM_BOT_TOKEN=your_bot_token_here
-TELEGRAM_ADMIN_CHAT_ID=your_chat_id_here
-TELEGRAM_WEBHOOK_SECRET=some-random-secret
-APP_BASE_URL=https://your-app-domain.com
+```json
+{
+  "ok": true,
+  "timestamp": "2025-11-12T00:00:00.000Z",
+  "uptime": 3600,
+  "environment": "production"
+}
 ```
 
-### 4. Automatic Webhook Setup
+#### Wave 2 Endpoints
 
-When the server starts, it will automatically:
+**1. Presets (Quick Amounts)**
 
-- Check current webhook configuration
-- Set webhook to `{APP_BASE_URL}/webhook/telegram`
-- Configure webhook secret for security
-- Log success/failure in server logs
+```http
+GET /api/presets
+```
 
-### 5. Manual Webhook Management
+Returns preset gas amounts for quick selection.
 
-You can also manage webhooks manually:
+**2. Batch Top-Up**
+
+```http
+POST /api/topup/batch
+Content-Type: application/json
+
+{
+  "items": [
+    {
+      "chain": "base",
+      "settleAddress": "0x123...",
+      "settleAmount": "5",
+      "memo": "optional"
+    }
+  ]
+}
+```
+
+**3. Gift Creation**
+
+```http
+POST /api/gifts
+Content-Type: application/json
+
+{
+  "chain": "eth",
+  "amount": "10",
+  "message": "Welcome gift!"
+}
+```
+
+**4. Gift Claim**
+
+```http
+GET /api/gifts/:giftId
+```
+
+**5. Deep Link Validation**
+
+```http
+GET /api/deeplink/validate?chain=base&amount=5&address=0x...
+```
+
+**6. Proof of Payment**
+
+```http
+GET /api/proof/shift/:shiftId
+```
+
+Returns detailed transaction proof with explorer links.
+
+**7. Status Dashboard**
+
+```http
+GET /api/status
+```
+
+Returns real-time metrics:
+
+```json
+{
+  "success": true,
+  "data": {
+    "uptime": { "seconds": 180, "formatted": "3m" },
+    "shifts": {
+      "today": 5,
+      "last24h": 12,
+      "completed": 10,
+      "failed": 1,
+      "pending": 1
+    },
+    "successRate": 90.9,
+    "topChains": [{ "chain": "base", "count": 6 }],
+    "topCoins": [{ "coin": "USDT", "count": 8 }]
+  }
+}
+```
+
+**8. Test Alert**
+
+```http
+POST /api/test-alert
+```
+
+Generates test watchlist alert with deep link (for demo purposes).
+
+### SideShift Integration
+
+**Get Quote**
+
+```http
+GET /api/pair?from=usdt-ethereum&to=eth-base&amount=10
+```
+
+**Create Shift**
+
+```http
+POST /api/shifts/variable
+Content-Type: application/json
+
+{
+  "depositCoin": "USDT",
+  "depositNetwork": "ethereum",
+  "settleCoin": "ETH",
+  "settleNetwork": "base",
+  "settleAddress": "0x123...",
+  "settleMemo": "optional-for-xrp-xlm-eos"
+}
+```
+
+**Get Shift Status**
+
+```http
+GET /api/shifts/:shiftId
+```
+
+---
+
+## 🤖 Telegram Bot
+
+### Setup Instructions
+
+1. **Create Bot**
+
+   - Message [@BotFather](https://t.me/BotFather)
+   - Use `/newbot` command
+   - Copy bot token
+
+2. **Get Chat ID**
+
+   - Message your bot
+   - Visit: `https://api.telegram.org/bot<TOKEN>/getUpdates`
+   - Find `chat.id` in response
+
+3. **Configure Environment**
+
+   ```env
+   TELEGRAM_BOT_TOKEN=123456:ABC-DEF...
+   TELEGRAM_ADMIN_CHAT_ID=123456789
+   TELEGRAM_WEBHOOK_SECRET=random-secret
+   APP_BASE_URL=https://your-app.onrender.com
+   ```
+
+4. **Deploy**
+   - Webhook automatically configured on server start
+   - URL: `{APP_BASE_URL}/webhook/telegram/{WEBHOOK_SECRET}`
+
+### Bot Commands
+
+| Command          | Description                         |
+| ---------------- | ----------------------------------- |
+| `/start`         | Welcome message with main menu      |
+| `/topup`         | Start gas top-up flow               |
+| `/status`        | View order status                   |
+| `/shifts`        | List recent shifts                  |
+| `/notifications` | Manage notification settings        |
+| `/cancel_order`  | Cancel pending order                |
+| `/test`          | Test bot connectivity (dev mode)    |
+| `/ping`          | Check bot responsiveness (dev mode) |
+
+### Bot Features
+
+- **Interactive Menus**: Inline buttons for easy navigation
+- **Step-by-step Flow**: Guided process for creating orders
+- **Real-time Updates**: Order status notifications
+- **Error Handling**: User-friendly error messages
+- **Preset Integration**: Quick amount selection
+- **Batch Support**: Upload CSV for bulk operations
+- **Gift Cards**: Create and claim gas gifts
+
+### Bot Flow Example
+
+```
+User: /topup
+Bot: 💰 Gas Top-Up
+     Select target chain:
+     [Ethereum] [Base] [Polygon] [Arbitrum] [Optimism] [Avalanche]
+
+User: [Base]
+Bot: How much gas do you need?
+     [Quick Amounts: $5] [$10] [$20] [$50]
+     Or enter custom amount...
+
+User: $10
+Bot: Please enter your Base wallet address...
+
+User: 0x123...
+Bot: ✅ Quote received!
+     You pay: 10 USDT
+     You receive: ~0.0035 ETH on Base
+     Rate: 1 ETH = 2857 USDT
+
+     [Confirm] [Cancel]
+
+User: [Confirm]
+Bot: 🎉 Order created!
+     Shift ID: 80efbb...
+
+     Send exactly 10 USDT to:
+     0xabc...
+
+     [Copy Address] [Track Order] [View Proof]
+```
+
+---
+
+## 🖥️ Frontend Features
+
+### Pages
+
+### Pages
+
+| Route             | Description            | Features                                                                |
+| ----------------- | ---------------------- | ----------------------------------------------------------------------- |
+| `/`               | Home landing page      | Hero, features showcase, how it works, supported chains, swap interface |
+| `/presets`        | Quick amount selection | $5, $10, $20, $50 preset cards with chain selection                     |
+| `/topup`          | Custom gas top-up      | Manual amount entry with full customization                             |
+| `/batch`          | Bulk gas distribution  | CSV upload, 50 addresses max, memo support                              |
+| `/gift/create`    | Create gas gift        | Shareable link generation, 7-day expiry                                 |
+| `/gift/:id`       | Claim gas gift         | One-click claim, pre-filled form                                        |
+| `/deeplink`       | Alert navigation       | Pre-filled from URL params (chain, amount, address)                     |
+| `/status`         | System dashboard       | Real-time metrics, test alert button                                    |
+| `/proof/:shiftId` | Transaction proof      | Explorer links, full transaction details                                |
+
+### UI/UX Highlights
+
+- **Responsive Design**: Mobile-first, works on all screen sizes
+- **Dark Theme**: Modern gradient backgrounds (black → gray-900)
+- **Smooth Animations**: Framer Motion for page transitions
+- **Loading States**: Skeleton screens and spinners
+- **Error Handling**: User-friendly error messages with retry buttons
+- **Toast Notifications**: Real-time feedback for actions
+- **Navigation Bar**: Fixed header with menu links and CTA button
+- **Proper Spacing**: 80px gap between nav and content
+
+### Key Components
+
+- **SwapInterface**: Main order creation form with memo field support
+- **OrderTracker**: Track shift status by ID
+- **FeaturesShowcase**: Animated feature cards
+- **Navigation**: Responsive nav bar with mobile menu
+- **Proof Page**: Blockchain explorer integration
+
+---
+
+## 🧪 Testing Guide
+
+### Manual Testing Checklist
+
+#### 1. **Home Page** (`/`)
+
+- ✅ Hero section loads
+- ✅ Features showcase animates
+- ✅ Supported chains display correctly
+- ✅ Swap interface functional
+- ✅ Order tracker works
+
+#### 2. **Presets** (`/presets`)
+
+- ✅ 4 preset cards displayed ($5, $10, $20, $50)
+- ✅ Chain selection dropdown works
+- ✅ Clicking preset navigates to topup with prefilled amount
+- ✅ USDT amounts shown correctly (not ETH)
+
+#### 3. **Top-Up** (`/topup`)
+
+- ✅ Custom amount input
+- ✅ Chain selector (6 chains: ETH, Base, Polygon, Arbitrum, Optimism, Avalanche)
+- ✅ Quote fetches correctly
+- ✅ Order creation succeeds
+- ✅ Success modal shows with 3 buttons: View Proof, Track Order, New Order
+
+#### 4. **Batch** (`/batch`)
+
+- ✅ CSV upload works
+- ✅ Manual address entry (up to 50)
+- ✅ Chain selection
+- ✅ Batch submission creates multiple shifts
+- ✅ Results show shift IDs with "View Proof" links
+- ✅ Memo field hint displayed
+
+#### 5. **Gifts** (`/gift/create`, `/gift/:id`)
+
+- ✅ Create gift with amount and message
+- ✅ Shareable link generated
+- ✅ Link opens gift page
+- ✅ Claim button shows pre-filled form
+- ✅ Gift expires after 7 days
+
+#### 6. **Deep Link** (`/deeplink?chain=base&amount=5&address=0x...`)
+
+- ✅ Validates URL parameters
+- ✅ Pre-fills swap interface
+- ✅ Invalid params show error
+- ✅ Missing params prompt user
+
+#### 7. **Status Dashboard** (`/status`)
+
+- ✅ Uptime displays correctly
+- ✅ Metrics update every 30 seconds
+- ✅ Top chains/coins shown
+- ✅ **Test Alert Button** triggers demo alert
+- ✅ Alert success message displays
+- ✅ Proper spacing below navigation
+
+#### 8. **Proof Page** (`/proof/:shiftId`)
+
+- ✅ Shift details load
+- ✅ Status badge shows correct status
+- ✅ Deposit address clickable → explorer
+- ✅ Settlement address clickable → explorer
+- ✅ Amounts, rates, fees displayed
+- ✅ Timestamps formatted correctly
+
+#### 9. **Memo Support**
+
+- ✅ SwapInterface shows memo field for XRP/XLM/EOS
+- ✅ Memo field has yellow warning border
+- ✅ BatchTopUp CSV format mentions memo column
+- ✅ Backend accepts memo parameter
+
+#### 10. **Navigation**
+
+- ✅ All nav links work
+- ✅ 80px spacing between nav and content
+- ✅ Mobile menu functional
+- ✅ Active route highlighted
+
+### Telegram Bot Testing
+
+#### Prerequisites
+
+- Bot token configured
+- Webhook set up
+- Admin chat ID configured
+
+#### Test Flow
+
+1. **Start Bot**
+
+   ```
+   /start
+   ```
+
+   Expected: Welcome message with inline buttons
+
+2. **Create Top-Up Order**
+
+   ```
+   /topup
+   → Select chain (e.g., Base)
+   → Enter amount (e.g., 10)
+   → Enter address (e.g., 0x...)
+   → Confirm
+   ```
+
+   Expected: Order created with shift ID and deposit address
+
+3. **Check Status**
+
+   ```
+   /status
+   → Enter shift ID
+   ```
+
+   Expected: Current shift status displayed
+
+4. **View Shifts**
+
+   ```
+   /shifts
+   ```
+
+   Expected: List of recent shifts
+
+5. **Test Alert** (from Status page)
+
+   - Click "🧪 Send Test Alert" button
+   - Expected: Success message with deep link
+   - In production: Would send Telegram notification
+
+6. **Cancel Order**
+   ```
+   /cancel_order
+   ```
+   Expected: Cancellation confirmation
+
+### API Testing (curl)
 
 ```bash
-# Get current webhook info
-curl https://api.telegram.org/bot<TOKEN>/getWebhookInfo
+# Health check
+curl https://octaneshift-api-1.onrender.com/health
 
-# Set webhook manually
-curl -X POST https://api.telegram.org/bot<TOKEN>/setWebhook \
+# Get presets
+curl https://octaneshift-api-1.onrender.com/api/presets
+
+# Get quote
+curl "https://octaneshift-api-1.onrender.com/api/pair?from=usdt-ethereum&to=eth-base&amount=10"
+
+# Create shift
+curl -X POST https://octaneshift-api-1.onrender.com/api/shifts/variable \
   -H "Content-Type: application/json" \
   -d '{
-    "url": "https://your-app.com/webhook/telegram",
-    "secret_token": "your-webhook-secret"
+    "depositCoin": "USDT",
+    "depositNetwork": "ethereum",
+    "settleCoin": "ETH",
+    "settleNetwork": "base",
+    "settleAddress": "0x1641a049381149afaacef386ee58fda5ad9be32"
   }'
 
-# Delete webhook
-curl -X POST https://api.telegram.org/bot<TOKEN>/deleteWebhook
+# Get status
+curl https://octaneshift-api-1.onrender.com/api/status
+
+# Test alert
+curl -X POST https://octaneshift-api-1.onrender.com/api/test-alert
 ```
 
-## API Endpoints
+---
 
-### Health Check
+## 📹 Video Recording Guide (90 seconds)
 
-- `GET /health` - System health status
+### Scene Breakdown (No Voice Needed)
 
-### SideShift API
+**Part 1: Web Interface (30 seconds)**
 
-- `GET /api/permissions` - Get user permissions from SideShift (includes x-user-ip header)
-- `GET /api/pair?from=COIN-NET&to=COIN-NET&amount=NUM` - Get trading pair info (cached 30s)
-- `POST /api/shifts/variable` - Create a variable shift (returns depositAddress, depositMemo, depositMin/Max, expiresAt, id)
-- `GET /api/shifts/:id` - Get shift status and details
+1. **Home Page** (5s)
 
-### Telegram Webhook (if configured)
+   - Open https://octaneshift.vercel.app
+   - Show hero section
+   - Scroll to features showcase
 
-- `POST /webhook/telegram` - Telegram bot webhook endpoint
+2. **Presets Flow** (8s)
 
-## Scripts
+   - Click "Presets" in nav
+   - Show 4 preset cards
+   - Click "$10 USDT" card
+   - Show redirected to topup with amount prefilled
 
-- `npm run dev` - Start development server with hot reload
-- `npm run build` - Build TypeScript to JavaScript
-- `npm start` - Start production server
-- `npm run type-check` - Check TypeScript types
-- `npm run lint` - Lint code with ESLint
+3. **Create Order** (10s)
 
-## Architecture
+   - Select "Base" chain
+   - Enter wallet address: `0x1641a049381149afaacef386ee58fda5ad9be32`
+   - Click "Create Order"
+   - Show success modal with 3 buttons
 
-### Middleware Stack
+4. **View Proof** (7s)
+   - Click "View Proof" button
+   - Show proof page with explorer links
+   - Hover over deposit address to show clickable
+   - Show full transaction details
 
-1. **Trust Proxy** - For Render deployment
-2. **Helmet** - Security headers
-3. **CORS** - Cross-origin resource sharing
-4. **Pino HTTP** - Request logging
-5. **Body Parsing** - JSON/URL-encoded (1MB limit)
-6. **IP Extraction** - Real client IP detection
-7. **Rate Limiting** - Per-endpoint rate limits
-8. **Routes** - API endpoints
-9. **404 Handler** - Not found responses
-10. **Error Handler** - Global error handling
+**Part 2: Batch & Gifts (20 seconds)**
+
+5. **Batch Top-Up** (10s)
+
+   - Click "Batch Top-Up" in nav
+   - Show CSV format hint
+   - Add 2-3 addresses manually
+   - Click "Create Batch"
+   - Show results with "View Proof" links
+
+6. **Gift Cards** (10s)
+   - Click "Send Gift" in nav
+   - Fill: Amount $5, Chain: Base, Message: "Welcome!"
+   - Click "Create Gift"
+   - Show shareable link
+   - Open link in new tab
+   - Click "Claim Gift"
+   - Show pre-filled form
+
+**Part 3: Status & Test Alert (20 seconds)**
+
+7. **Status Dashboard** (10s)
+
+   - Click "Status" in nav
+   - Show real-time metrics
+   - Show uptime, success rate, volume cards
+   - Scroll to shift breakdown
+
+8. **Test Alert Demo** (10s)
+   - Click "🧪 Send Test Alert" button
+   - Show success message with alert details
+   - Show deep link in response
+   - Highlight: "In production, this sends Telegram notification"
+
+**Part 4: Telegram Bot (20 seconds)**
+
+9. **Bot Commands** (10s)
+
+   - Open Telegram bot
+   - Send `/start` - show menu
+   - Send `/topup` - show chain selection
+   - Select chain → show amount prompt
+   - Enter amount → show address prompt
+
+10. **Complete Bot Order** (10s)
+    - Enter address
+    - Show quote with Confirm button
+    - Click Confirm
+    - Show order created message
+    - Show inline buttons: Copy Address, Track Order, View Proof
+
+### Recording Tips
+
+- **Use screen recording software** (OBS Studio, Loom, or Windows Game Bar)
+- **Record at 1920x1080** for clarity
+- **Add text overlays** to explain each section (e.g., "Preset Quick Amounts", "Batch Processing", "Test Alert")
+- **Speed up** repetitive parts (like form filling) to 1.5x
+- **Add background music** (optional, royalty-free)
+- **Show mouse cursor** for clarity
+- **Pause between sections** for clean cuts
+
+### Text Overlays to Add
+
+```
+0:00 - "OctaneShift - Instant Gas Tokens"
+0:05 - "Preset Quick Amounts - $5, $10, $20, $50"
+0:13 - "Create Order - Select chain & enter address"
+0:23 - "View Proof - Blockchain explorer integration"
+0:30 - "Batch Top-Up - 50 addresses at once"
+0:40 - "Gift Cards - Shareable gas tokens"
+0:50 - "Status Dashboard - Real-time metrics"
+1:00 - "Test Alert - Demo watchlist → deep link flow"
+1:10 - "Telegram Bot - Mobile-first experience"
+1:20 - "Complete Platform - Web + Bot + API"
+```
+
+---
+
+## 🚀 Deployment
+
+### Backend (Render)
+
+1. **Create Web Service**
+
+   - Go to [Render Dashboard](https://dashboard.render.com)
+   - New → Web Service
+   - Connect GitHub repo
+
+2. **Configure**
+
+   - Build Command: `npm ci && npm run build`
+   - Start Command: `node dist/index.js`
+   - Environment: Node 20+
+
+3. **Environment Variables**
+   Set in Render dashboard:
+
+   ```
+   NODE_ENV=production
+   SIDESHIFT_SECRET=xxx
+   AFFILIATE_ID=xxx
+   FRONTEND_ORIGIN=https://octaneshift.vercel.app
+   TELEGRAM_BOT_TOKEN=xxx (optional)
+   TELEGRAM_ADMIN_CHAT_ID=xxx (optional)
+   TELEGRAM_WEBHOOK_SECRET=xxx (optional)
+   APP_BASE_URL=https://your-app.onrender.com
+   ```
+
+4. **Deploy**
+   - Click "Create Web Service"
+   - Wait for deployment (~2-3 minutes)
+   - Copy app URL
+
+### Frontend (Vercel)
+
+1. **Import Project**
+
+   - Go to [Vercel Dashboard](https://vercel.com/dashboard)
+   - New Project → Import from GitHub
+   - Select repository
+
+2. **Configure**
+
+   - Root Directory: `web`
+   - Build Command: `npm run build`
+   - Output Directory: `dist`
+   - Install Command: `npm install`
+
+3. **Environment Variables**
+
+   ```
+   VITE_API_URL=https://octaneshift-api-1.onrender.com
+   ```
+
+4. **Deploy**
+   - Click "Deploy"
+   - Automatic deployments on push to `main`
+   - Preview deployments for PRs
+
+### Post-Deployment
+
+1. **Update CORS**
+
+   - Add Vercel URL to `FRONTEND_ORIGIN` in Render
+
+2. **Test Endpoints**
+
+   ```bash
+   curl https://your-app.onrender.com/health
+   curl https://your-app.vercel.app
+   ```
+
+3. **Configure Telegram Webhook** (if using bot)
+   - Webhook auto-configures on server start
+   - Verify: `curl https://api.telegram.org/bot<TOKEN>/getWebhookInfo`
+
+---
+
+## 🔧 Development
 
 ### Project Structure
 
 ```
-src/
-├── index.ts              # Main server file
-├── lib/
-│   └── sideshift.ts      # SideShift API client
-├── routes/
-│   └── sideshift.ts      # SideShift route handlers
-├── middleware/
-│   ├── ip.ts             # Client IP extraction
-│   ├── errors.ts         # Error handling
-│   └── rateLimit.ts      # Rate limiting config
-├── bot/
-│   └── telegram.ts       # Telegram bot integration
-└── utils/
-    ├── logger.ts         # Pino logger setup
-    └── qr.ts             # QR code generation
+octaneshift-api/
+├── src/                    # Backend source
+│   ├── bot/               # Telegram bot
+│   │   ├── telegram.ts   # Bot logic
+│   │   ├── config.ts     # Bot configuration
+│   │   ├── networkMap.ts # Chain mappings
+│   │   └── uiHelpers.ts  # UI utilities
+│   ├── routes/           # API routes
+│   │   ├── batch.ts      # Batch top-up
+│   │   ├── deeplink.ts   # Deep link validation
+│   │   ├── gifts.ts      # Gift cards
+│   │   ├── presets.ts    # Preset amounts
+│   │   ├── proof.ts      # Transaction proof
+│   │   ├── status.ts     # Status dashboard
+│   │   ├── test-alert.ts # Test alert
+│   │   └── ...           # Other routes
+│   ├── lib/              # Core libraries
+│   │   ├── sideshift.ts  # SideShift API client
+│   │   ├── coinsCache.ts # Coin data caching
+│   │   └── chains.ts     # Chain configurations
+│   ├── middleware/       # Express middleware
+│   ├── services/         # Background services
+│   ├── store/            # In-memory data store
+│   └── utils/            # Utilities
+│
+├── web/                   # Frontend source
+│   ├── src/
+│   │   ├── components/   # React components
+│   │   │   ├── Navigation.tsx
+│   │   │   ├── SwapInterface.tsx
+│   │   │   └── ...
+│   │   ├── pages/        # Route pages
+│   │   │   ├── Presets.tsx
+│   │   │   ├── BatchTopUp.tsx
+│   │   │   ├── GiftCreate.tsx
+│   │   │   ├── Status.tsx
+│   │   │   ├── Proof.tsx
+│   │   │   └── ...
+│   │   ├── services/     # API client
+│   │   ├── config/       # Chain configs
+│   │   └── App.tsx       # Main app component
+│   └── public/           # Static assets
+│
+├── .env                   # Environment variables
+├── package.json          # Backend dependencies
+├── tsconfig.json         # TypeScript config
+└── README.md             # This file
 ```
 
-## Features Detail
+### Scripts
 
-### Compliance & Legal Requirements
-
-The API includes a comprehensive compliance gate that:
-
-- **Permission Checking**: Calls SideShift's `getPermissions` API with user IP
-- **Geo-Restriction**: Returns HTTP 451 (Unavailable For Legal Reasons) for restricted regions
-- **Demo Mode**: Set `DEMO_MODE=true` to bypass permission checks for read-only operations
-- **Applied to Routes**:
-  - `POST /api/shifts/variable` (always checked)
-  - `GET /api/pair` (checked unless `DEMO_MODE=true`)
-
-**Example 451 Response:**
-
-```json
-{
-  "type": "about:blank#region-restricted",
-  "title": "Unavailable For Legal Reasons",
-  "status": 451,
-  "detail": "Not available in your region.",
-  "restricted": true,
-  "country": "XX",
-  "message": "Not available in your region."
-}
-```
-
-### Privacy & Data Protection
-
-**Automatic Data Masking in Logs:**
-
-- **IP Addresses**: Last octet masked (`192.168.1.***`)
-- **Wallet Addresses**: Last 6 characters masked (`1A1zP1eP5Q...******`)
-- **Sensitive Fields**: Authorization headers, cookies, tokens redacted
-
-**Protected Fields:**
-
-- `userIp`, `settleAddress`, `depositAddress`, `refundAddress`
-- All authorization and authentication data
-- Private keys, mnemonics, secrets
-
-### Client IP Extraction
-
-- Extracts real client IP from `x-forwarded-for` header
-- Handles proxy environments (Render, Cloudflare, etc.)
-- Falls back to `req.ip` if no proxy headers
-- Exposes IP via `req.userIp`
-
-### Error Handling
-
-- **Problem+JSON** responses (RFC 7807)
-- Custom error classes (`APIError`, `ValidationError`, etc.)
-- Zod validation error handling
-- Request ID tracking
-- Structured error logging
-
-### Rate Limiting
-
-- **General**: 100 requests/15 minutes per IP
-- **Strict**: 10 requests/15 minutes per IP (sensitive endpoints)
-- **Health**: 60 requests/minute per IP
-- Monitoring service bypass for health checks
-
-### Telegram Integration
-
-- Order creation notifications
-- Status update alerts
-- Error notifications
-- System status updates
-- Admin command handling
-
-### Security
-
-- Helmet security headers
-- Strict CORS policy
-- Request size limits (1MB)
-- Rate limiting
-- Input validation with Zod
-- Sensitive data redaction in logs
-
-## Deployment
-
-### Deploy to Render
-
-The project includes `render.yaml` for automatic deployment. Follow these steps:
-
-#### 1. Fork & Connect Repository
-
-1. Fork this repository to your GitHub account
-2. Go to [Render Dashboard](https://dashboard.render.com)
-3. Click "New +" → "Web Service"
-4. Connect your GitHub repository
-
-#### 2. Configure Environment Variables
-
-Set these environment variables in Render dashboard:
-
-| Variable                  | Value                           | Description                |
-| ------------------------- | ------------------------------- | -------------------------- |
-| `SIDESHIFT_SECRET`        | `your_secret_key`               | SideShift API secret       |
-| `AFFILIATE_ID`            | `your_affiliate_id`             | SideShift affiliate ID     |
-| `COMMISSION_RATE`         | `0.0`                           | Commission rate (auto-set) |
-| `FRONTEND_ORIGIN`         | `https://your-frontend.com`     | CORS origin                |
-| `TELEGRAM_BOT_TOKEN`      | `bot_token_from_botfather`      | Telegram bot token         |
-| `TELEGRAM_WEBHOOK_SECRET` | `random_secret_string`          | Webhook security           |
-| `APP_BASE_URL`            | `https://your-app.onrender.com` | Set after deploy           |
-
-#### 3. Deploy
-
-1. Render automatically detects `render.yaml` configuration
-2. Click "Create Web Service"
-3. Deployment starts automatically
-4. Copy your app URL (e.g., `https://octaneshift-api.onrender.com`)
-5. Update `APP_BASE_URL` environment variable with your URL
-6. Redeploy to activate Telegram webhook
-
-#### 4. Verify Deployment
-
-Test your API with curl:
+**Backend:**
 
 ```bash
-# Health check
-curl https://your-app.onrender.com/health
-
-# Expected response:
-{
-  "ok": true,
-  "timestamp": "2024-01-01T00:00:00.000Z",
-  "uptime": 3600,
-  "environment": "production",
-  "version": "1.0.0"
-}
-
-# Test SideShift permissions endpoint
-curl https://your-app.onrender.com/api/permissions
-
-# Test Telegram webhook (should return 401 without secret)
-curl -X POST https://your-app.onrender.com/webhook/telegram/wrong-secret
+npm run dev        # Development with hot reload
+npm run build      # Build TypeScript
+npm start          # Production server
+npm run type-check # Check types
 ```
 
-#### 5. Configure Telegram Bot (Optional)
-
-If using Telegram notifications:
+**Frontend:**
 
 ```bash
-# Check webhook status
-curl https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getWebhookInfo
-
-# Your webhook should be automatically configured to:
-# https://your-app.onrender.com/webhook/telegram/<WEBHOOK_SECRET>
+cd web
+npm run dev        # Development server (port 5173)
+npm run build      # Build for production
+npm run preview    # Preview production build
 ```
 
-### Alternative Deployment
+### Adding New Features
 
-For other platforms, ensure:
+1. **Backend Route**
 
-- Node.js 20+ runtime
-- Set `trust proxy` for reverse proxy environments
-- Configure all required environment variables
-- Use `npm ci && npm run build` for building
-- Start with `node dist/index.js`
+   ```typescript
+   // src/routes/my-feature.ts
+   import { Router } from "express";
+   const router = Router();
 
-### Environment Variables (Production)
+   router.get("/", async (req, res) => {
+     res.json({ success: true, data: {} });
+   });
 
-Set these secrets in your deployment platform:
+   export default router;
+   ```
 
-- `FRONTEND_ORIGIN`
-- `SIDESHIFT_AFFILIATE_ID`
-- `TELEGRAM_BOT_TOKEN`
-- `TELEGRAM_ADMIN_CHAT_ID`
-- `TELEGRAM_WEBHOOK_SECRET`
+2. **Register Route**
 
-## Monitoring
+   ```typescript
+   // src/index.ts
+   import myFeatureRoutes from "./routes/my-feature";
+   app.use("/api/my-feature", myFeatureRoutes);
+   ```
+
+3. **Frontend Page**
+
+   ```tsx
+   // web/src/pages/MyFeature.tsx
+   export default function MyFeature() {
+     return <div>My Feature</div>;
+   }
+   ```
+
+4. **Add Route**
+   ```tsx
+   // web/src/App.tsx
+   <Route path="/my-feature" element={<MyFeature />} />
+   ```
+
+---
+
+## 🔐 Security Features
+
+- **Helmet**: Security headers
+- **CORS**: Restricted origins
+- **Rate Limiting**: 100 req/15min (general), 10 req/15min (strict)
+- **Input Validation**: Zod schemas for all inputs
+- **Data Masking**: IP addresses and wallet addresses in logs
+- **Webhook Secrets**: Telegram webhook validation
+- **No Sensitive Data**: Private keys never stored
+
+---
+
+## 📊 Monitoring
 
 ### Health Endpoint
 
-The `/health` endpoint returns:
-
-```json
-{
-  "ok": true,
-  "timestamp": "2024-01-01T00:00:00.000Z",
-  "uptime": 3600,
-  "environment": "production",
-  "version": "1.0.0",
-  "commit": "abc1234"
-}
+```bash
+curl https://octaneshift-api-1.onrender.com/health
 ```
 
-### Logging
+### Logs
 
-- Structured JSON logs with Pino
-- Request/response logging
-- Error tracking with context
-- Sensitive data redaction
-- Development-friendly pretty printing
+- **Backend**: Render logs (dashboard → Logs tab)
+- **Frontend**: Vercel logs (dashboard → Deployments → Logs)
+- **Structured JSON**: Pino logger with masking
 
-## License
+### Error Tracking
+
+- Problem+JSON responses (RFC 7807)
+- Request ID tracking
+- Stack traces in development only
+
+---
+
+## 📝 License
 
 MIT License - see LICENSE file for details.
+
+---
+
+## 🤝 Contributing
+
+1. Fork repository
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open Pull Request
+
+---
+
+## 📞 Support
+
+- **GitHub Issues**: [Report bugs](https://github.com/mohamedwael201193/octaneshift-api/issues)
+- **Email**: support@octaneshift.com
+- **Telegram**: [@octaneshift_bot](https://t.me/your_bot_name)
+
+---
+
+## 🎯 Wave 2 Completion Checklist
+
+- ✅ Preset quick amounts
+- ✅ Batch gas top-up (50 addresses)
+- ✅ Gift card system
+- ✅ Deep link navigation
+- ✅ Notification system
+- ✅ Proof of payment
+- ✅ Status dashboard with test alert
+- ✅ Telegram bot integration
+- ✅ Memo/tag support
+- ✅ Navigation spacing
+- ✅ Mobile-responsive design
+- ✅ Error handling & validation
+- ✅ Production deployment
+- ✅ Comprehensive documentation
+
+---
+
+**Built with ❤️ by the OctaneShift team**
