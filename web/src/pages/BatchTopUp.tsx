@@ -2,6 +2,7 @@ import axios from "axios";
 import { motion } from "framer-motion";
 import {
   CheckCircle,
+  ExternalLink,
   Loader2,
   Plus,
   Send,
@@ -11,6 +12,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import toast from "react-hot-toast";
+import { Link } from "react-router-dom";
 
 interface Recipient {
   settleAddress: string;
@@ -306,13 +308,13 @@ export default function BatchTopUp() {
                       : "bg-red-900/20 border border-red-700/50"
                   }`}
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 flex-1">
                     {result.status === "created" ? (
                       <CheckCircle className="w-5 h-5 text-green-400" />
                     ) : (
                       <XCircle className="w-5 h-5 text-red-400" />
                     )}
-                    <div>
+                    <div className="flex-1">
                       <div className="text-white font-mono text-sm">
                         {result.address}
                       </div>
@@ -324,9 +326,18 @@ export default function BatchTopUp() {
                     </div>
                   </div>
                   {result.shiftId && (
-                    <span className="text-gray-400 text-xs font-mono">
-                      {result.shiftId}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-400 text-xs font-mono">
+                        {result.shiftId}
+                      </span>
+                      <Link
+                        to={`/proof/${result.shiftId}`}
+                        className="inline-flex items-center gap-1 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs transition-colors"
+                      >
+                        View Proof
+                        <ExternalLink className="w-3 h-3" />
+                      </Link>
+                    </div>
                   )}
                 </div>
               ))}

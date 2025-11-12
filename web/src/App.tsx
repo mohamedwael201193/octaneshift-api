@@ -14,6 +14,7 @@ import DeepLink from "./pages/DeepLink";
 import GiftCreate from "./pages/GiftCreate";
 import GiftReceive from "./pages/GiftReceive";
 import Presets from "./pages/Presets";
+import Proof from "./pages/Proof";
 import Status from "./pages/Status";
 import TopUp from "./pages/TopUp";
 
@@ -80,6 +81,7 @@ function App() {
             <Route path="/gift/create" element={<GiftCreate />} />
             <Route path="/gift/:id" element={<GiftReceive />} />
             <Route path="/presets" element={<Presets />} />
+            <Route path="/proof/:shiftId" element={<Proof />} />
           </Routes>
         </div>
       </Router>
