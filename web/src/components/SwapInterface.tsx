@@ -389,6 +389,14 @@ export default function SwapInterface({
               <div className="flex gap-3 mb-4">
                 <button
                   onClick={() => {
+                    window.location.href = `/proof/${orderDetails.shiftId}`;
+                  }}
+                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors"
+                >
+                  📄 View Proof
+                </button>
+                <button
+                  onClick={() => {
                     const trackerSection =
                       document.getElementById("tracker-section");
                     if (trackerSection) {
