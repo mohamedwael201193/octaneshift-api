@@ -17,6 +17,7 @@ import { Link } from "react-router-dom";
 interface Recipient {
   settleAddress: string;
   settleAmount: string;
+  memo?: string;
 }
 
 interface BatchResult {
@@ -75,9 +76,14 @@ export default function BatchTopUp() {
       const parsed: Recipient[] = [];
 
       for (let i = startIndex; i < lines.length && i < 50; i++) {
-        const [address, amount] = lines[i].split(",").map((s) => s.trim());
+        const parts = lines[i].split(",").map((s) => s.trim());
+        const [address, amount, memo] = parts;
         if (address && amount) {
-          parsed.push({ settleAddress: address, settleAmount: amount });
+          parsed.push({
+            settleAddress: address,
+            settleAmount: amount,
+            ...(memo && { memo }),
+          });
         }
       }
 
@@ -112,6 +118,7 @@ export default function BatchTopUp() {
           chain: chain,
           settleAddress: r.settleAddress,
           settleAmount: r.settleAmount,
+          ...(r.memo && { memo: r.memo }),
         })),
       });
 
@@ -201,6 +208,10 @@ export default function BatchTopUp() {
           </label>
           <p className="text-gray-500 text-sm text-center mt-2">
             Format: address, amount (one per line)
+          </p>
+          <p className="text-yellow-500 text-xs text-center mt-1">
+            💡 For coins requiring memos (XRP, XLM, EOS), add a third column:
+            address, amount, memo
           </p>
         </motion.div>
 

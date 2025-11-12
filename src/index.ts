@@ -24,6 +24,7 @@ import sideshiftRoutes from "./routes/sideshift";
 import statsRoutes from "./routes/stats";
 import statusRoutes from "./routes/status";
 import telegramRoutes from "./routes/telegram";
+import testAlertRoutes from "./routes/test-alert";
 import topupRoutes from "./routes/topup";
 import watchlistsRoutes from "./routes/watchlists";
 import webhooksRoutes from "./routes/webhooks";
@@ -533,6 +534,7 @@ app.use("/api/gifts", giftsRoutes);
 app.use("/api/proof", proofRoutes);
 app.use("/api/stats", statsRoutes);
 app.use("/api/status", statusRoutes);
+app.use("/api/test-alert", testAlertRoutes);
 app.use("/api/topup", topupRoutes);
 app.use("/api/topup", batchRoutes); // Mount batch routes under /api/topup/batch
 app.use("/api/presets", presetsRoutes);

@@ -54,8 +54,15 @@ export default function SwapInterface({
       : prefilledAmount || "10";
   const [amount, setAmount] = useState(normalizedAmount);
   const [settleAddress, setSettleAddress] = useState(prefilledAddress || "");
+  const [settleMemo, setSettleMemo] = useState("");
   const [isCreatingShift, setIsCreatingShift] = useState(false);
   const [orderDetails, setOrderDetails] = useState<OrderDetails | null>(null);
+
+  // Check if selected coin requires memo (XRP, XLM, EOS, etc.)
+  const requiresMemo = () => {
+    const [coin] = toChain.split("-");
+    return ["xrp", "xlm", "eos"].includes(coin.toLowerCase());
+  };
 
   const {
     data: quote,
@@ -115,6 +122,7 @@ export default function SwapInterface({
         settleCoin: settleCoin.toUpperCase(),
         settleNetwork,
         settleAddress,
+        ...(settleMemo && { settleMemo }),
       };
 
       const result = await octaneAPI.createShift(shiftData);
@@ -285,6 +293,33 @@ export default function SwapInterface({
               className="w-full bg-gray-900/70 border border-gray-600 rounded-xl px-4 py-4 text-white font-mono focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
             />
           </div>
+
+          {requiresMemo() && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mb-6"
+            >
+              <label className="block text-sm font-semibold mb-3 text-gray-300">
+                Memo / Destination Tag{" "}
+                <span className="text-yellow-400">
+                  (Optional but recommended)
+                </span>
+              </label>
+              <input
+                type="text"
+                value={settleMemo}
+                onChange={(e) => setSettleMemo(e.target.value)}
+                placeholder="Enter memo/tag if required by your exchange"
+                className="w-full bg-gray-900/70 border border-yellow-600/50 rounded-xl px-4 py-4 text-white font-mono focus:outline-none focus:ring-2 focus:ring-yellow-500 transition-all"
+              />
+              <p className="mt-2 text-xs text-yellow-400/70">
+                ⚠️ If depositing to an exchange, check if they require a
+                memo/tag
+              </p>
+            </motion.div>
+          )}
 
           <div className="flex gap-4">
             <motion.button

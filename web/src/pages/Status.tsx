@@ -5,6 +5,7 @@ import {
   BarChart3,
   Clock,
   Loader2,
+  TestTube,
   TrendingUp,
   Zap,
 } from "lucide-react";
@@ -33,6 +34,8 @@ export default function Status() {
   const [status, setStatus] = useState<StatusData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
+  const [testAlertLoading, setTestAlertLoading] = useState(false);
+  const [testAlertResult, setTestAlertResult] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchStatus = async () => {
@@ -53,6 +56,28 @@ export default function Status() {
     const interval = setInterval(fetchStatus, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  const handleTestAlert = async () => {
+    setTestAlertLoading(true);
+    setTestAlertResult(null);
+    try {
+      const response = await axios.post(`${API_BASE_URL}/api/test-alert`);
+      if (response.data.success) {
+        setTestAlertResult(
+          `✅ ${
+            response.data.message ||
+            "Test alert sent! Check Telegram bot for notification."
+          }`
+        );
+      }
+    } catch (err: any) {
+      setTestAlertResult(
+        `❌ ${err.response?.data?.error || "Failed to send test alert"}`
+      );
+    } finally {
+      setTestAlertLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -89,12 +114,46 @@ export default function Status() {
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
         >
-          <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-            System Status
-          </h1>
-          <p className="text-gray-400">
-            Real-time metrics and performance data
-          </p>
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+                System Status
+              </h1>
+              <p className="text-gray-400">
+                Real-time metrics and performance data
+              </p>
+            </div>
+            <button
+              onClick={handleTestAlert}
+              disabled={testAlertLoading}
+              className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-lg font-semibold transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {testAlertLoading ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <TestTube className="w-5 h-5" />
+                  🧪 Send Test Alert
+                </>
+              )}
+            </button>
+          </div>
+          {testAlertResult && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`p-4 rounded-lg ${
+                testAlertResult.startsWith("✅")
+                  ? "bg-green-900/30 border border-green-700/50 text-green-300"
+                  : "bg-red-900/30 border border-red-700/50 text-red-300"
+              }`}
+            >
+              {testAlertResult}
+            </motion.div>
+          )}
         </motion.div>
 
         {/* Metrics Grid */}
