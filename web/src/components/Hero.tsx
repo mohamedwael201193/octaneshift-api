@@ -1,28 +1,35 @@
-import { motion } from 'framer-motion';
-import { useQuery } from '@tanstack/react-query';
-import { FaEthereum, FaTelegram, FaRocket, FaExchangeAlt } from 'react-icons/fa';
-import { SiPolygon } from 'react-icons/si';
-import octaneAPI from '../services/api';
+import { useQuery } from "@tanstack/react-query";
+import { motion } from "framer-motion";
+import {
+  FaEthereum,
+  FaExchangeAlt,
+  FaRocket,
+  FaTelegram,
+} from "react-icons/fa";
+import { SiPolygon } from "react-icons/si";
+import octaneAPI from "../services/api";
 
 export default function Hero() {
   const { data: botStatus } = useQuery({
-    queryKey: ['botStatus'],
+    queryKey: ["botStatus"],
     queryFn: octaneAPI.getBotStatus,
     refetchInterval: 30000,
-    retry: false
+    retry: false,
   });
 
   const scrollToSwap = () => {
-    document.getElementById('swap-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document
+      .getElementById("swap-section")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const floatingIcons = [
-    { Icon: FaEthereum, color: '#627EEA', delay: 0 },
-    { Icon: FaEthereum, color: '#0052FF', delay: 0.2 },
-    { Icon: FaEthereum, color: '#28A0F0', delay: 0.4 },
-    { Icon: SiPolygon, color: '#8247E5', delay: 0.6 },
-    { Icon: FaEthereum, color: '#FF0420', delay: 0.8 },
-    { Icon: FaEthereum, color: '#E84142', delay: 1 },
+    { Icon: FaEthereum, color: "#627EEA", delay: 0 },
+    { Icon: FaEthereum, color: "#0052FF", delay: 0.2 },
+    { Icon: FaEthereum, color: "#28A0F0", delay: 0.4 },
+    { Icon: SiPolygon, color: "#8247E5", delay: 0.6 },
+    { Icon: FaEthereum, color: "#FF0420", delay: 0.8 },
+    { Icon: FaEthereum, color: "#E84142", delay: 1 },
   ];
 
   return (
@@ -65,7 +72,7 @@ export default function Hero() {
             transition={{
               duration: 2,
               repeat: Infinity,
-              ease: "easeInOut"
+              ease: "easeInOut",
             }}
             className="inline-block"
           >
@@ -80,10 +87,39 @@ export default function Hero() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="text-2xl md:text-3xl text-gray-300 mb-12"
+          className="text-2xl md:text-3xl text-gray-300 mb-4"
         >
-          Instant Gas Top-ups Across All Chains
+          Never Get Stuck Without Gas Again
         </motion.p>
+
+        <motion.p
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="text-lg text-gray-400 mb-12 max-w-2xl mx-auto"
+        >
+          Gas Autopilot for Web3. Monitor your wallets, get smart alerts, and
+          attach gas refills to any swap.
+        </motion.p>
+
+        {/* Key Benefits */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          className="flex flex-wrap justify-center gap-4 mb-12"
+        >
+          {["🚀 Gas-on-Arrival", "📊 Smart Alerts", "⚡ One Dashboard"].map(
+            (benefit, i) => (
+              <span
+                key={i}
+                className="bg-gray-800/50 border border-gray-700 px-4 py-2 rounded-full text-gray-300 text-sm"
+              >
+                {benefit}
+              </span>
+            )
+          )}
+        </motion.div>
 
         <div className="flex justify-center gap-8 mb-12">
           {floatingIcons.map(({ Icon, color, delay }, index) => (
@@ -100,8 +136,8 @@ export default function Hero() {
                   delay: delay + 0.5,
                   duration: 2,
                   repeat: Infinity,
-                  ease: "easeInOut"
-                }
+                  ease: "easeInOut",
+                },
               }}
               className="hidden md:block"
             >
@@ -150,7 +186,7 @@ export default function Hero() {
           >
             <div className="bg-gray-800/50 backdrop-blur-xl rounded-2xl px-8 py-4 border border-gray-700">
               <p className="text-3xl font-bold text-green-400">
-                {botStatus.data.bot_running ? '🟢 Online' : '🔴 Offline'}
+                {botStatus.data.bot_running ? "🟢 Online" : "🔴 Offline"}
               </p>
               <p className="text-gray-400 mt-1">Bot Status</p>
             </div>

@@ -45,6 +45,20 @@ export async function checkPermissions(
   try {
     const userIp = (req as any).userIp || "unknown";
 
+    // Skip permission check entirely in development mode
+    const isDev =
+      process.env.NODE_ENV === "development" || !process.env.NODE_ENV;
+    if (isDev) {
+      logger.debug(
+        { userIp: maskIp(userIp), path: req.path },
+        "Skipping permission check in development mode"
+      );
+      // Set mock permissions for dev
+      (req as any).userPermissions = { createShift: true, requestQuote: true };
+      next();
+      return;
+    }
+
     // Skip permission check in demo mode for non-mutating operations
     const isDemoMode = process.env.DEMO_MODE === "true";
     const isReadOnlyOperation =

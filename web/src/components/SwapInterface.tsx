@@ -5,12 +5,18 @@ import toast from "react-hot-toast";
 import { FaArrowDown, FaSpinner } from "react-icons/fa";
 import { DEPOSIT_TOKENS, SUPPORTED_CHAINS } from "../config/chains";
 import octaneAPI from "../services/api";
+import GasOnArrivalToggle from "./GasOnArrival";
+import QRCode from "./QRCode";
 
 interface OrderDetails {
   shiftId: string;
   depositAddress: string;
   depositAmount: string;
   depositCoin: string;
+  gasShiftId?: string;
+  gasDepositAddress?: string;
+  gasAmount?: string;
+  gasSymbol?: string;
 }
 
 interface SwapInterfaceProps {
@@ -45,6 +51,20 @@ export default function SwapInterface({
     return mapping[chainName.toLowerCase()] || "eth-base";
   };
 
+  // Get chain alias from toChain (e.g., 'eth-base' -> 'base')
+  const getChainAlias = (toChainValue: string): string => {
+    const network = toChainValue.split("-")[1] || "base";
+    const aliasMap: Record<string, string> = {
+      ethereum: "eth",
+      base: "base",
+      arbitrum: "arb",
+      optimism: "op",
+      polygon: "pol",
+      avalanche: "avax",
+    };
+    return aliasMap[network] || network;
+  };
+
   const [fromToken, setFromToken] = useState("usdt-ethereum");
   const [toChain, setToChain] = useState(getToChainFromName(prefilledChain));
   // Use minimum of 5 USDT to avoid "below minimum" errors from SideShift
@@ -57,6 +77,10 @@ export default function SwapInterface({
   const [settleMemo, setSettleMemo] = useState("");
   const [isCreatingShift, setIsCreatingShift] = useState(false);
   const [orderDetails, setOrderDetails] = useState<OrderDetails | null>(null);
+
+  // Wave 3: Gas-on-Arrival state
+  const [gasOnArrivalEnabled, setGasOnArrivalEnabled] = useState(false);
+  const [_gasAmount, setGasAmount] = useState(""); // Used by GasOnArrivalToggle component
 
   // Check if selected coin requires memo (XRP, XLM, EOS, etc.)
   const requiresMemo = () => {
@@ -303,23 +327,30 @@ export default function SwapInterface({
             >
               <label className="block text-sm font-semibold mb-3 text-gray-300">
                 Memo / Destination Tag{" "}
-                <span className="text-yellow-400">
-                  (Optional but recommended)
-                </span>
+                <span className="text-red-400 font-bold">(Required)</span>
               </label>
               <input
                 type="text"
                 value={settleMemo}
                 onChange={(e) => setSettleMemo(e.target.value)}
-                placeholder="Enter memo/tag if required by your exchange"
-                className="w-full bg-gray-900/70 border border-yellow-600/50 rounded-xl px-4 py-4 text-white font-mono focus:outline-none focus:ring-2 focus:ring-yellow-500 transition-all"
+                placeholder="Enter memo/tag - REQUIRED for this network"
+                className="w-full bg-gray-900/70 border border-red-600/50 rounded-xl px-4 py-4 text-white font-mono focus:outline-none focus:ring-2 focus:ring-red-500 transition-all"
               />
-              <p className="mt-2 text-xs text-yellow-400/70">
-                ⚠️ If depositing to an exchange, check if they require a
-                memo/tag
+              <p className="mt-2 text-xs text-red-400/70">
+                🚨 WARNING: Without a memo/tag, your funds may be lost
+                permanently!
               </p>
             </motion.div>
           )}
+
+          {/* Wave 3: Gas-on-Arrival Toggle */}
+          <GasOnArrivalToggle
+            destChain={getChainAlias(toChain)}
+            enabled={gasOnArrivalEnabled}
+            onToggle={setGasOnArrivalEnabled}
+            onAmountChange={setGasAmount}
+            className="mb-6"
+          />
 
           <div className="flex gap-4">
             <motion.button
@@ -397,6 +428,16 @@ export default function SwapInterface({
                 </div>
               </div>
 
+              {/* QR Code for deposit address */}
+              <div className="mb-4 flex justify-center">
+                <QRCode
+                  value={orderDetails.depositAddress}
+                  size={180}
+                  label={`Send ${orderDetails.depositAmount} ${orderDetails.depositCoin} to:`}
+                  showCopy={true}
+                />
+              </div>
+
               <div className="p-4 bg-gray-900/50 rounded-lg mb-4">
                 <p className="text-sm text-gray-400 mb-3">
                   Send exactly{" "}
@@ -420,6 +461,37 @@ export default function SwapInterface({
                   📋 Copy Deposit Address
                 </button>
               </div>
+
+              {/* Gas-on-Arrival info if enabled */}
+              {orderDetails.gasShiftId && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="p-4 bg-purple-500/10 border border-purple-500/30 rounded-lg mb-4"
+                >
+                  <h4 className="font-bold text-purple-400 mb-2">
+                    🚀 Gas-on-Arrival Active!
+                  </h4>
+                  <p className="text-sm text-gray-400 mb-3">
+                    You'll also receive{" "}
+                    <span className="text-white font-bold">
+                      {orderDetails.gasAmount} {orderDetails.gasSymbol}
+                    </span>{" "}
+                    gas
+                  </p>
+                  <div className="flex justify-center mb-2">
+                    <QRCode
+                      value={orderDetails.gasDepositAddress || ""}
+                      size={120}
+                      label="Gas deposit address:"
+                      showCopy={true}
+                    />
+                  </div>
+                  <code className="text-xs text-purple-400 break-all block text-center">
+                    {orderDetails.gasDepositAddress}
+                  </code>
+                </motion.div>
+              )}
 
               <div className="flex gap-3 mb-4">
                 <button

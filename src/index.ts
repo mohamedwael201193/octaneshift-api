@@ -14,7 +14,10 @@ import adminRoutes from "./routes/admin";
 import batchRoutes from "./routes/batch";
 import checkoutRoutes from "./routes/checkout";
 import deeplinkRoutes from "./routes/deeplink";
+import gasRoutes from "./routes/gas";
+import gasOnArrivalRoutes from "./routes/gasOnArrival";
 import giftsRoutes from "./routes/gifts";
+import loyaltyRoutes from "./routes/loyalty";
 import metaRoutes from "./routes/meta";
 import notificationsRoutes from "./routes/notifications";
 import presetsRoutes from "./routes/presets";
@@ -542,6 +545,9 @@ app.use("/api/telegram", telegramRoutes);
 app.use("/api/webhooks", webhooksRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api", watchlistsRoutes);
+app.use("/api/gas", gasRoutes);
+app.use("/api/loyalty", loyaltyRoutes);
+app.use("/api/gas-on-arrival", gasOnArrivalRoutes);
 
 // Debug endpoint for SideShift order creation
 app.post("/api/test/create-shift", express.json(), async (req, res) => {

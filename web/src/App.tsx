@@ -11,10 +11,13 @@ import SupportedChains from "./components/SupportedChains";
 import SwapInterface from "./components/SwapInterface";
 import BatchTopUp from "./pages/BatchTopUp";
 import DeepLink from "./pages/DeepLink";
+import GasDashboard from "./pages/GasDashboard";
 import GiftCreate from "./pages/GiftCreate";
 import GiftReceive from "./pages/GiftReceive";
+import Loyalty from "./pages/Loyalty";
 import Presets from "./pages/Presets";
 import Proof from "./pages/Proof";
+import Simulator from "./pages/Simulator";
 import Status from "./pages/Status";
 import TopUp from "./pages/TopUp";
 
@@ -80,7 +83,13 @@ function App() {
             <Route path="/batch" element={<BatchTopUp />} />
             <Route path="/gift/create" element={<GiftCreate />} />
             <Route path="/gift/:id" element={<GiftReceive />} />
+            <Route path="/gas" element={<GasDashboard />} />
+            <Route path="/dashboard" element={<GasDashboard />} />
             <Route path="/presets" element={<Presets />} />
+            <Route path="/loyalty" element={<Loyalty />} />
+            <Route path="/rewards" element={<Loyalty />} />
+            <Route path="/simulator" element={<Simulator />} />
+            <Route path="/451" element={<Simulator />} />
             <Route path="/proof/:shiftId" element={<Proof />} />
           </Routes>
         </div>

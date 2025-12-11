@@ -1,6 +1,8 @@
 import {
   FaBolt,
   FaChartBar,
+  FaCrown,
+  FaGasPump,
   FaGift,
   FaLayerGroup,
   FaRocket,
@@ -23,6 +25,14 @@ export default function Navigation() {
           {/* Navigation Links */}
           <div className="hidden md:flex items-center gap-6">
             <Link
+              to="/gas"
+              className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors"
+            >
+              <FaGasPump className="w-4 h-4" />
+              <span>Gas</span>
+            </Link>
+
+            <Link
               to="/presets"
               className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors"
             >
@@ -35,7 +45,7 @@ export default function Navigation() {
               className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors"
             >
               <FaLayerGroup className="w-4 h-4" />
-              <span>Batch Top-Up</span>
+              <span>Batch</span>
             </Link>
 
             <Link
@@ -43,7 +53,15 @@ export default function Navigation() {
               className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors"
             >
               <FaGift className="w-4 h-4" />
-              <span>Send Gift</span>
+              <span>Gift</span>
+            </Link>
+
+            <Link
+              to="/loyalty"
+              className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors"
+            >
+              <FaCrown className="w-4 h-4" />
+              <span>Rewards</span>
             </Link>
 
             <Link
@@ -56,10 +74,10 @@ export default function Navigation() {
 
             <Link
               to="/#swap"
-              className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg font-semibold transition-all flex items-center gap-2"
+              className="px-4 py-2 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white rounded-lg font-semibold transition-all flex items-center gap-2"
             >
               <FaRocket className="w-4 h-4" />
-              <span>Start Swapping</span>
+              <span>Top Up</span>
             </Link>
           </div>
 

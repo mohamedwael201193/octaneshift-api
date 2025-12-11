@@ -232,9 +232,21 @@ export class SideShiftClient {
           errorDetails
         );
 
+        // Extract error message - SideShift returns { error: { message: "..." } } format
+        let errorMessage = "Unknown error";
+        if (typeof errorDetails.message === "string") {
+          errorMessage = errorDetails.message;
+        } else if (errorDetails.error) {
+          if (typeof errorDetails.error === "string") {
+            errorMessage = errorDetails.error;
+          } else if (typeof errorDetails.error.message === "string") {
+            errorMessage = errorDetails.error.message;
+          }
+        }
+
         throw new SideShiftError(
           response.statusCode || 500,
-          errorDetails.message || errorDetails.error || "Unknown error",
+          errorMessage,
           errorCode,
           errorDetails
         );
