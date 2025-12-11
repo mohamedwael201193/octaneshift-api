@@ -1,8 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
-import { FaArrowDown, FaSpinner } from "react-icons/fa";
+import {
+  FaArrowDown,
+  FaCheckCircle,
+  FaExclamationTriangle,
+  FaSpinner,
+} from "react-icons/fa";
 import { DEPOSIT_TOKENS, SUPPORTED_CHAINS } from "../config/chains";
 import octaneAPI from "../services/api";
 import GasOnArrivalToggle from "./GasOnArrival";
@@ -81,6 +86,48 @@ export default function SwapInterface({
   // Wave 3: Gas-on-Arrival state
   const [gasOnArrivalEnabled, setGasOnArrivalEnabled] = useState(false);
   const [_gasAmount, setGasAmount] = useState(""); // Used by GasOnArrivalToggle component
+
+  // Wave 3: Address validation state
+  const [addressValidation, setAddressValidation] = useState<{
+    valid: boolean;
+    hint: string;
+    checking: boolean;
+  }>({ valid: true, hint: "", checking: false });
+
+  // Debounced address validation
+  const validateAddress = useCallback(
+    async (address: string, network: string) => {
+      if (!address || address.length < 10) {
+        setAddressValidation({ valid: true, hint: "", checking: false });
+        return;
+      }
+
+      setAddressValidation((prev) => ({ ...prev, checking: true }));
+
+      try {
+        const result = await octaneAPI.validateAddress(address, network);
+        setAddressValidation({
+          valid: result.data.valid,
+          hint: result.data.hint,
+          checking: false,
+        });
+      } catch (error) {
+        // If validation endpoint fails, don't block the user
+        setAddressValidation({ valid: true, hint: "", checking: false });
+      }
+    },
+    []
+  );
+
+  // Validate address when it changes (with debounce)
+  useEffect(() => {
+    const network = toChain.split("-")[1] || "ethereum";
+    const timeoutId = setTimeout(() => {
+      validateAddress(settleAddress, network);
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [settleAddress, toChain, validateAddress]);
 
   // Check if selected coin requires memo (XRP, XLM, EOS, etc.)
   const requiresMemo = () => {
@@ -309,13 +356,49 @@ export default function SwapInterface({
             <label className="block text-sm font-semibold mb-3 text-gray-300">
               Your Wallet Address
             </label>
-            <input
-              type="text"
-              value={settleAddress}
-              onChange={(e) => setSettleAddress(e.target.value)}
-              placeholder="0x..."
-              className="w-full bg-gray-900/70 border border-gray-600 rounded-xl px-4 py-4 text-white font-mono focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
-            />
+            <div className="relative">
+              <input
+                type="text"
+                value={settleAddress}
+                onChange={(e) => setSettleAddress(e.target.value)}
+                placeholder="0x..."
+                className={`w-full bg-gray-900/70 border rounded-xl px-4 py-4 text-white font-mono focus:outline-none focus:ring-2 transition-all pr-12 ${
+                  settleAddress && !addressValidation.checking
+                    ? addressValidation.valid
+                      ? "border-green-500/50 focus:ring-green-500"
+                      : "border-red-500/50 focus:ring-red-500"
+                    : "border-gray-600 focus:ring-purple-500"
+                }`}
+              />
+              {/* Validation indicator */}
+              <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                {addressValidation.checking ? (
+                  <FaSpinner className="text-gray-400 animate-spin" />
+                ) : settleAddress ? (
+                  addressValidation.valid ? (
+                    <FaCheckCircle className="text-green-400" />
+                  ) : (
+                    <FaExclamationTriangle className="text-red-400" />
+                  )
+                ) : null}
+              </div>
+            </div>
+            {/* Validation hint */}
+            {settleAddress &&
+              !addressValidation.checking &&
+              addressValidation.hint && (
+                <motion.p
+                  initial={{ opacity: 0, y: -5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={`mt-2 text-xs ${
+                    addressValidation.valid
+                      ? "text-green-400/70"
+                      : "text-red-400"
+                  }`}
+                >
+                  {addressValidation.hint}
+                </motion.p>
+              )}
           </div>
 
           {requiresMemo() && (

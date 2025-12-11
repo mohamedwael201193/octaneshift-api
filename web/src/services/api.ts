@@ -175,6 +175,31 @@ export const octaneAPI = {
     const { data } = await api.post("/api/gas-on-arrival/create", params);
     return data;
   },
+
+  // Wave 3: Address validation endpoint
+  validateAddress: async (address: string, network: string) => {
+    const { data } = await api.post("/api/validate/address", {
+      address,
+      network,
+    });
+    return data;
+  },
+
+  // Wave 3: Coins list endpoint
+  getCoins: async () => {
+    const { data } = await api.get("/api/coins");
+    return data;
+  },
+
+  getCoin: async (coin: string) => {
+    const { data } = await api.get(`/api/coins/${coin}`);
+    return data;
+  },
+
+  searchCoins: async (query: string) => {
+    const { data } = await api.get(`/api/coins/search/${query}`);
+    return data;
+  },
 };
 
 export default octaneAPI;

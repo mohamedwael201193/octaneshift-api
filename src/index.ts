@@ -13,10 +13,12 @@ import { addSecurityHeaders, sanitizeInput } from "./middleware/security";
 import adminRoutes from "./routes/admin";
 import batchRoutes from "./routes/batch";
 import checkoutRoutes from "./routes/checkout";
+import coinsRoutes from "./routes/coins";
 import deeplinkRoutes from "./routes/deeplink";
 import gasRoutes from "./routes/gas";
 import gasOnArrivalRoutes from "./routes/gasOnArrival";
 import giftsRoutes from "./routes/gifts";
+import iconsRoutes from "./routes/icons";
 import loyaltyRoutes from "./routes/loyalty";
 import metaRoutes from "./routes/meta";
 import notificationsRoutes from "./routes/notifications";
@@ -29,6 +31,7 @@ import statusRoutes from "./routes/status";
 import telegramRoutes from "./routes/telegram";
 import testAlertRoutes from "./routes/test-alert";
 import topupRoutes from "./routes/topup";
+import validationRoutes from "./routes/validation";
 import watchlistsRoutes from "./routes/watchlists";
 import webhooksRoutes from "./routes/webhooks";
 import * as backgroundJobs from "./services/backgroundJobs";
@@ -548,6 +551,9 @@ app.use("/api", watchlistsRoutes);
 app.use("/api/gas", gasRoutes);
 app.use("/api/loyalty", loyaltyRoutes);
 app.use("/api/gas-on-arrival", gasOnArrivalRoutes);
+app.use("/api/icons", iconsRoutes);
+app.use("/api/coins", coinsRoutes);
+app.use("/api/validate", validationRoutes);
 
 // Debug endpoint for SideShift order creation
 app.post("/api/test/create-shift", express.json(), async (req, res) => {
