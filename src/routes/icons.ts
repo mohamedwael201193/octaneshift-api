@@ -178,9 +178,8 @@ router.get(
         return;
       }
 
-      // Get content type from response
-      const contentType =
-        (response.headers["content-type"] as string) || "image/svg+xml";
+      // Always use correct SVG content type (SideShift returns "image/svg" which browsers reject)
+      const contentType = "image/svg+xml";
 
       // Read the response body as buffer
       const chunks: Buffer[] = [];
