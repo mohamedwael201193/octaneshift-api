@@ -86,7 +86,12 @@ export default function CoinIcon({
           isLoading ? "opacity-0" : "opacity-100"
         } transition-opacity`}
         onLoad={() => setIsLoading(false)}
-        onError={() => {
+        onError={(e) => {
+          console.error(
+            `Icon load error for ${apiCode || `${coin}-${network}`}:`,
+            e
+          );
+          console.log("Icon URL:", getIconUrl(apiCode, coin, network));
           setIsLoading(false);
           setHasError(true);
         }}
