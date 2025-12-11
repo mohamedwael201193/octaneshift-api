@@ -92,32 +92,48 @@ router.get(
       }
 
       // Fetch from SideShift API
-      const sideShiftUrl = `https://sideshift.ai/api/v2/coins/icon/${coinNetwork}`;
-      logger.debug(
-        { coinNetwork, url: sideShiftUrl },
-        "Fetching icon from SideShift"
-      );
-
-      const response = await request(sideShiftUrl, {
+      // Try full coin-network first, then fallback to just coin symbol
+      let sideShiftUrl = `https://sideshift.ai/api/v2/coins/icon/${coinNetwork}`;
+      let response = await request(sideShiftUrl, {
         method: "GET",
         headers: {
           "User-Agent": "OctaneShift/1.0",
         },
-      });
+      }).catch(() => null);
 
-      if (response.statusCode !== 200) {
-        logger.warn(
-          { coinNetwork, status: response.statusCode },
-          "Failed to fetch icon from SideShift"
+      // If failed, try just the coin symbol (e.g., "usdt" instead of "usdt-ethereum")
+      if (!response || response.statusCode !== 200) {
+        const [coinSymbol] = coinNetwork.split("-");
+        sideShiftUrl = `https://sideshift.ai/api/v2/coins/icon/${coinSymbol}`;
+        logger.debug(
+          { coinNetwork, fallbackCoin: coinSymbol, url: sideShiftUrl },
+          "Trying fallback icon with coin symbol only"
         );
 
-        // Return a placeholder SVG for missing icons
-        const placeholderSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
-          <circle cx="16" cy="16" r="14" fill="#374151"/>
-          <text x="16" y="21" text-anchor="middle" fill="#9CA3AF" font-size="14" font-family="system-ui">?</text>
+        response = await request(sideShiftUrl, {
+          method: "GET",
+          headers: {
+            "User-Agent": "OctaneShift/1.0",
+          },
+        }).catch(() => null);
+      }
+
+      if (!response || response.statusCode !== 200) {
+        logger.warn(
+          { coinNetwork, status: response?.statusCode },
+          "Failed to fetch icon from SideShift, using placeholder"
+        );
+
+        // Return a better placeholder SVG with coin symbol
+        const [coinSymbol] = coinNetwork.split("-");
+        const displaySymbol = coinSymbol.toUpperCase().substring(0, 3);
+        const placeholderSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+          <circle cx="16" cy="16" r="15" fill="#374151"/>
+          <circle cx="16" cy="16" r="13" fill="#1f2937"/>
+          <text x="16" y="20" text-anchor="middle" fill="#9CA3AF" font-size="10" font-weight="bold" font-family="Arial, sans-serif">${displaySymbol}</text>
         </svg>`;
 
-        res.set("Content-Type", "image/svg+xml");
+        res.set("Content-Type", "image/svg+xml; charset=utf-8");
         res.set("Cache-Control", "public, max-age=3600"); // 1 hour for placeholders
         // CORS headers for cross-origin image loading
         res.set("Access-Control-Allow-Origin", "*");
