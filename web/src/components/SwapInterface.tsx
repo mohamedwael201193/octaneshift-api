@@ -12,6 +12,14 @@ import { DEPOSIT_TOKENS, SUPPORTED_CHAINS } from "../config/chains";
 import octaneAPI from "../services/api";
 import GasOnArrivalToggle from "./GasOnArrival";
 import QRCode from "./QRCode";
+import TokenSelect, {
+  createChainOptions,
+  createDepositTokenOptions,
+} from "./TokenSelect";
+
+// Pre-create options for selectors
+const depositTokenOptions = createDepositTokenOptions(DEPOSIT_TOKENS);
+const chainOptions = createChainOptions(SUPPORTED_CHAINS);
 
 interface OrderDetails {
   shiftId: string;
@@ -248,23 +256,13 @@ export default function SwapInterface({
             <label className="block text-sm font-semibold mb-3 text-gray-300">
               From
             </label>
-            <select
+            <TokenSelect
               value={fromToken}
-              onChange={(e) => setFromToken(e.target.value)}
-              className="w-full bg-gray-900/70 border border-gray-600 rounded-xl px-4 py-4 text-white focus:outline-none focus:ring-2 focus:ring-green-500 transition-all"
-            >
-              {DEPOSIT_TOKENS.map((token) =>
-                token.networks.map((network) => (
-                  <option
-                    key={`${token.symbol}-${network}`}
-                    value={`${token.symbol.toLowerCase()}-${network}`}
-                  >
-                    {token.symbol} on{" "}
-                    {network.charAt(0).toUpperCase() + network.slice(1)}
-                  </option>
-                ))
-              )}
-            </select>
+              onChange={setFromToken}
+              options={depositTokenOptions}
+              placeholder="Select token to send"
+              searchable={true}
+            />
             <input
               type="number"
               value={amount}
@@ -288,17 +286,13 @@ export default function SwapInterface({
             <label className="block text-sm font-semibold mb-3 text-gray-300">
               To
             </label>
-            <select
+            <TokenSelect
               value={toChain}
-              onChange={(e) => setToChain(e.target.value)}
-              className="w-full bg-gray-900/70 border border-gray-600 rounded-xl px-4 py-4 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
-            >
-              {SUPPORTED_CHAINS.map((chain) => (
-                <option key={chain.apiCode} value={chain.apiCode}>
-                  {chain.symbol} on {chain.name}
-                </option>
-              ))}
-            </select>
+              onChange={setToChain}
+              options={chainOptions}
+              placeholder="Select destination chain"
+              searchable={true}
+            />
           </div>
 
           {quoteError && (

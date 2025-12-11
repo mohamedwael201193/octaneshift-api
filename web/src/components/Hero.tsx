@@ -1,13 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import {
-  FaEthereum,
-  FaExchangeAlt,
-  FaRocket,
-  FaTelegram,
-} from "react-icons/fa";
-import { SiPolygon } from "react-icons/si";
+import { FaExchangeAlt, FaRocket, FaTelegram } from "react-icons/fa";
 import octaneAPI from "../services/api";
+import CoinIcon from "./CoinIcon";
 
 export default function Hero() {
   const { data: botStatus } = useQuery({
@@ -23,13 +18,16 @@ export default function Hero() {
       ?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  const floatingIcons = [
-    { Icon: FaEthereum, color: "#627EEA", delay: 0 },
-    { Icon: FaEthereum, color: "#0052FF", delay: 0.2 },
-    { Icon: FaEthereum, color: "#28A0F0", delay: 0.4 },
-    { Icon: SiPolygon, color: "#8247E5", delay: 0.6 },
-    { Icon: FaEthereum, color: "#FF0420", delay: 0.8 },
-    { Icon: FaEthereum, color: "#E84142", delay: 1 },
+  // Real coin icons from SideShift API
+  const floatingCoins = [
+    { coin: "eth", network: "ethereum", delay: 0 },
+    { coin: "eth", network: "base", delay: 0.2 },
+    { coin: "eth", network: "arbitrum", delay: 0.4 },
+    { coin: "matic", network: "polygon", delay: 0.6 },
+    { coin: "eth", network: "optimism", delay: 0.8 },
+    { coin: "avax", network: "avalanche", delay: 1 },
+    { coin: "bnb", network: "bsc", delay: 1.2 },
+    { coin: "sol", network: "solana", delay: 1.4 },
   ];
 
   return (
@@ -121,8 +119,8 @@ export default function Hero() {
           )}
         </motion.div>
 
-        <div className="flex justify-center gap-8 mb-12">
-          {floatingIcons.map(({ Icon, color, delay }, index) => (
+        <div className="flex justify-center gap-6 mb-12">
+          {floatingCoins.map(({ coin, network, delay }, index) => (
             <motion.div
               key={index}
               initial={{ opacity: 0, y: 50 }}
@@ -141,7 +139,7 @@ export default function Hero() {
               }}
               className="hidden md:block"
             >
-              <Icon className="text-5xl" style={{ color }} />
+              <CoinIcon coin={coin} network={network} size={48} />
             </motion.div>
           ))}
         </div>
