@@ -84,6 +84,9 @@ router.get(
         res.set("Content-Type", cached.contentType);
         res.set("Cache-Control", "public, max-age=86400"); // 24 hours
         res.set("X-Cache", "HIT");
+        // CORS headers for cross-origin image loading
+        res.set("Access-Control-Allow-Origin", "*");
+        res.set("Cross-Origin-Resource-Policy", "cross-origin");
         res.send(cached.data);
         return;
       }
@@ -116,6 +119,9 @@ router.get(
 
         res.set("Content-Type", "image/svg+xml");
         res.set("Cache-Control", "public, max-age=3600"); // 1 hour for placeholders
+        // CORS headers for cross-origin image loading
+        res.set("Access-Control-Allow-Origin", "*");
+        res.set("Cross-Origin-Resource-Policy", "cross-origin");
         res.send(placeholderSvg);
         return;
       }
@@ -148,6 +154,9 @@ router.get(
       res.set("Content-Type", contentType);
       res.set("Cache-Control", "public, max-age=86400"); // 24 hours
       res.set("X-Cache", "MISS");
+      // CORS headers for cross-origin image loading
+      res.set("Access-Control-Allow-Origin", "*");
+      res.set("Cross-Origin-Resource-Policy", "cross-origin");
       res.send(iconData);
     } catch (error) {
       logger.error(
@@ -163,6 +172,9 @@ router.get(
 
       res.set("Content-Type", "image/svg+xml");
       res.set("Cache-Control", "public, max-age=300"); // 5 minutes for errors
+      // CORS headers for cross-origin image loading
+      res.set("Access-Control-Allow-Origin", "*");
+      res.set("Cross-Origin-Resource-Policy", "cross-origin");
       res.send(placeholderSvg);
     }
   }
