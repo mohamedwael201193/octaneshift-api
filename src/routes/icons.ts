@@ -94,12 +94,33 @@ router.get(
       // Fetch from SideShift API
       // Try full coin-network first, then fallback to just coin symbol
       let sideShiftUrl = `https://sideshift.ai/api/v2/coins/icon/${coinNetwork}`;
-      let response = await request(sideShiftUrl, {
-        method: "GET",
-        headers: {
-          "User-Agent": "OctaneShift/1.0",
-        },
-      }).catch(() => null);
+      logger.debug(
+        { coinNetwork, url: sideShiftUrl },
+        "Attempting to fetch icon from SideShift"
+      );
+
+      let response: any = null;
+      try {
+        response = await request(sideShiftUrl, {
+          method: "GET",
+          headers: {
+            "User-Agent": "OctaneShift/1.0",
+            Accept: "*/*",
+          },
+          headersTimeout: 10000,
+          bodyTimeout: 10000,
+        });
+
+        logger.debug(
+          { coinNetwork, statusCode: response.statusCode },
+          "Received response from SideShift"
+        );
+      } catch (error: any) {
+        logger.warn(
+          { coinNetwork, error: error.message },
+          "Error fetching icon with full coin-network"
+        );
+      }
 
       // If failed, try just the coin symbol (e.g., "usdt" instead of "usdt-ethereum")
       if (!response || response.statusCode !== 200) {
@@ -110,12 +131,27 @@ router.get(
           "Trying fallback icon with coin symbol only"
         );
 
-        response = await request(sideShiftUrl, {
-          method: "GET",
-          headers: {
-            "User-Agent": "OctaneShift/1.0",
-          },
-        }).catch(() => null);
+        try {
+          response = await request(sideShiftUrl, {
+            method: "GET",
+            headers: {
+              "User-Agent": "OctaneShift/1.0",
+              Accept: "*/*",
+            },
+            headersTimeout: 10000,
+            bodyTimeout: 10000,
+          });
+
+          logger.debug(
+            { coinSymbol, statusCode: response.statusCode },
+            "Received fallback response from SideShift"
+          );
+        } catch (error: any) {
+          logger.warn(
+            { coinSymbol, error: error.message },
+            "Error fetching icon with coin symbol only"
+          );
+        }
       }
 
       if (!response || response.statusCode !== 200) {
