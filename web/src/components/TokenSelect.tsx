@@ -202,11 +202,13 @@ export function createDepositTokenOptions(
 
   for (const token of depositTokens) {
     for (const network of token.networks) {
+      const apiCode = `${token.symbol.toLowerCase()}-${network}`;
       options.push({
-        value: `${token.symbol.toLowerCase()}-${network}`,
+        value: apiCode,
         label: token.symbol,
         coin: token.symbol.toLowerCase(),
         network: network,
+        apiCode: apiCode, // Add apiCode so CoinIcon can use it
         subLabel: network.charAt(0).toUpperCase() + network.slice(1),
       });
     }
@@ -233,6 +235,7 @@ export function createChainOptions(
       label: `${chain.symbol} on ${chain.name}`,
       coin: coin,
       network: network,
+      apiCode: chain.apiCode, // Add apiCode so CoinIcon can use it
       subLabel: chain.name,
     };
   });
