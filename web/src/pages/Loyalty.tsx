@@ -123,7 +123,8 @@ export default function Loyalty() {
 
       setStats({
         userId: data.userId || DEMO_USER_ID,
-        tier: tierName,
+        tier:
+          (tierName as "bronze" | "silver" | "gold" | "platinum") || "bronze",
         totalVolume: data.totalVolume || data.lifetimeVolumeUsd || 0,
         totalShifts: data.totalShifts || 0,
         totalGasTopups: data.totalGasTopups || data.gasTopups || 0,

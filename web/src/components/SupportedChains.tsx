@@ -48,11 +48,7 @@ export default function SupportedChains() {
                   }}
                 >
                   {/* Use real SideShift API icons */}
-                  <CoinIcon
-                    coin={chain.symbol.toLowerCase()}
-                    network={chain.networkId}
-                    size={48}
-                  />
+                  <CoinIcon apiCode={chain.apiCode} size={48} />
                 </motion.div>
 
                 <h3 className="text-2xl font-bold mb-2 text-white text-center">

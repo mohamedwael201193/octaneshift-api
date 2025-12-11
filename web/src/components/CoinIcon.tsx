@@ -9,8 +9,9 @@ const API_BASE =
   import.meta.env.VITE_API_URL || "https://octaneshift-api-1.onrender.com";
 
 interface CoinIconProps {
-  coin: string;
-  network?: string;
+  apiCode?: string; // e.g., "eth-ethereum", "pol-polygon"
+  coin?: string; // deprecated: use apiCode instead
+  network?: string; // deprecated: use apiCode instead
   size?: number;
   className?: string;
   showFallback?: boolean;
@@ -20,8 +21,12 @@ interface CoinIconProps {
  * Get icon URL for a coin
  * Uses the backend icons API which caches icons from SideShift
  */
-function getIconUrl(coin: string, network?: string): string {
-  const coinLower = coin.toLowerCase();
+function getIconUrl(apiCode?: string, coin?: string, network?: string): string {
+  if (apiCode) {
+    return `${API_BASE}/api/icons/${apiCode}`;
+  }
+  // Fallback for legacy coin+network format
+  const coinLower = coin?.toLowerCase() || "unknown";
   const networkLower = network?.toLowerCase() || coinLower;
   return `${API_BASE}/api/icons/${coinLower}-${networkLower}`;
 }
@@ -46,6 +51,7 @@ function FallbackIcon({ coin, size }: { coin: string; size: number }) {
 }
 
 export default function CoinIcon({
+  apiCode,
   coin,
   network,
   size = 24,
@@ -54,9 +60,10 @@ export default function CoinIcon({
 }: CoinIconProps) {
   const [hasError, setHasError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const displayName = apiCode?.split("-")[0] || coin || "coin";
 
   if (hasError && showFallback) {
-    return <FallbackIcon coin={coin} size={size} />;
+    return <FallbackIcon coin={displayName} size={size} />;
   }
 
   return (
@@ -71,8 +78,8 @@ export default function CoinIcon({
         />
       )}
       <img
-        src={getIconUrl(coin, network)}
-        alt={`${coin} icon`}
+        src={getIconUrl(apiCode, coin, network)}
+        alt={`${displayName} icon`}
         width={size}
         height={size}
         className={`rounded-full ${
@@ -94,14 +101,20 @@ export default function CoinIcon({
 export function CoinIconWithLabel({
   coin,
   network,
+  apiCode,
   label,
   size = 24,
   className = "",
 }: CoinIconProps & { label?: string }) {
   return (
     <div className={`inline-flex items-center gap-2 ${className}`}>
-      <CoinIcon coin={coin} network={network} size={size} />
-      <span className="font-medium">{label || coin.toUpperCase()}</span>
+      <CoinIcon coin={coin} network={network} apiCode={apiCode} size={size} />
+      <span className="font-medium">
+        {label ||
+          coin?.toUpperCase() ||
+          apiCode?.split("-")[0]?.toUpperCase() ||
+          "TOKEN"}
+      </span>
     </div>
   );
 }

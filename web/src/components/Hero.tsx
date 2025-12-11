@@ -20,14 +20,14 @@ export default function Hero() {
 
   // Real coin icons from SideShift API
   const floatingCoins = [
-    { coin: "eth", network: "ethereum", delay: 0 },
-    { coin: "eth", network: "base", delay: 0.2 },
-    { coin: "eth", network: "arbitrum", delay: 0.4 },
-    { coin: "matic", network: "polygon", delay: 0.6 },
-    { coin: "eth", network: "optimism", delay: 0.8 },
-    { coin: "avax", network: "avalanche", delay: 1 },
-    { coin: "bnb", network: "bsc", delay: 1.2 },
-    { coin: "sol", network: "solana", delay: 1.4 },
+    { apiCode: "eth-ethereum", delay: 0 },
+    { apiCode: "eth-base", delay: 0.2 },
+    { apiCode: "eth-arbitrum", delay: 0.4 },
+    { apiCode: "pol-polygon", delay: 0.6 },
+    { apiCode: "eth-optimism", delay: 0.8 },
+    { apiCode: "avax-avalanche", delay: 1 },
+    { apiCode: "bnb-bsc", delay: 1.2 },
+    { apiCode: "sol-solana", delay: 1.4 },
   ];
 
   return (
@@ -120,7 +120,7 @@ export default function Hero() {
         </motion.div>
 
         <div className="flex justify-center gap-6 mb-12">
-          {floatingCoins.map(({ coin, network, delay }, index) => (
+          {floatingCoins.map(({ apiCode, delay }, index) => (
             <motion.div
               key={index}
               initial={{ opacity: 0, y: 50 }}
@@ -139,7 +139,7 @@ export default function Hero() {
               }}
               className="hidden md:block"
             >
-              <CoinIcon coin={coin} network={network} size={48} />
+              <CoinIcon apiCode={apiCode} size={48} />
             </motion.div>
           ))}
         </div>

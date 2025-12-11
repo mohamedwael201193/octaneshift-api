@@ -13,6 +13,7 @@ interface SelectOption {
   label: string;
   coin: string;
   network: string;
+  apiCode?: string; // Full apiCode like "eth-ethereum" (preferred over coin+network)
   subLabel?: string;
 }
 
@@ -92,8 +93,10 @@ export default function TokenSelect({
           {selectedOption ? (
             <>
               <CoinIcon
-                coin={selectedOption.coin}
-                network={selectedOption.network}
+                apiCode={
+                  selectedOption.apiCode ||
+                  `${selectedOption.coin}-${selectedOption.network}`
+                }
                 size={28}
               />
               <div className="text-left">
@@ -160,8 +163,9 @@ export default function TokenSelect({
                     }`}
                   >
                     <CoinIcon
-                      coin={option.coin}
-                      network={option.network}
+                      apiCode={
+                        option.apiCode || `${option.coin}-${option.network}`
+                      }
                       size={28}
                     />
                     <div className="flex-1">
