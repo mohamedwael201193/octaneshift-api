@@ -81,12 +81,13 @@ router.get(
       const cached = iconCache.get(coinNetwork);
       if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
         logger.debug({ coinNetwork }, "Serving icon from cache");
-        res.set("Content-Type", cached.contentType);
+        res.set("Content-Type", `${cached.contentType}; charset=utf-8`);
         res.set("Cache-Control", "public, max-age=86400"); // 24 hours
         res.set("X-Cache", "HIT");
         // CORS headers for cross-origin image loading
         res.set("Access-Control-Allow-Origin", "*");
         res.set("Cross-Origin-Resource-Policy", "cross-origin");
+        res.set("X-Content-Type-Options", "nosniff");
         res.send(cached.data);
         return;
       }
@@ -202,12 +203,13 @@ router.get(
       );
 
       // Send response
-      res.set("Content-Type", contentType);
+      res.set("Content-Type", `${contentType}; charset=utf-8`);
       res.set("Cache-Control", "public, max-age=86400"); // 24 hours
       res.set("X-Cache", "MISS");
       // CORS headers for cross-origin image loading
       res.set("Access-Control-Allow-Origin", "*");
       res.set("Cross-Origin-Resource-Policy", "cross-origin");
+      res.set("X-Content-Type-Options", "nosniff");
       res.send(iconData);
     } catch (error) {
       logger.error(
