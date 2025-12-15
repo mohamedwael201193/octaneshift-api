@@ -52,19 +52,25 @@ export function authenticateToken(
       return;
     }
 
-    // For lightweight auth, the token is the userId
-    // In production, you'd validate JWT or session token here
-    const userId = token;
+    // For lightweight auth, the token is the userId (or wallet address)
+    const userId = token.toLowerCase(); // Normalize wallet addresses
 
-    // Verify user exists in store
+    // Check if user exists in store (legacy user) OR has valid wallet auth
     const user = store.getUser(userId);
+    const walletAuth = store.getWalletAuth(userId);
 
-    if (!user) {
-      res.status(401).json({
-        error: "Invalid token",
-        message: "User not found or token expired",
-      });
-      return;
+    if (!user && !walletAuth) {
+      // Auto-create wallet auth for Ethereum addresses
+      if (userId.startsWith("0x") && userId.length === 42) {
+        store.createWalletAuth(userId);
+        logger.info({ userId }, "Auto-created wallet auth for new user");
+      } else {
+        res.status(401).json({
+          error: "Invalid token",
+          message: "User not found or token expired",
+        });
+        return;
+      }
     }
 
     // Attach userId to request for downstream handlers
@@ -104,10 +110,11 @@ export function optionalAuth(
       const token = parts[1];
 
       if (token && token.trim() !== "") {
-        const userId = token;
+        const userId = token.toLowerCase();
         const user = store.getUser(userId);
+        const walletAuth = store.getWalletAuth(userId);
 
-        if (user) {
+        if (user || walletAuth) {
           req.userId = userId;
           logger.debug({ userId }, "Optional auth: User identified");
         }

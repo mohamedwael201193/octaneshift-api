@@ -99,28 +99,40 @@ export default function WalletButton() {
 
   if (!isAuthenticated) {
     return (
-      <div className="flex items-center gap-2">
-        <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-gray-800/60 rounded-lg border border-gray-700/50">
+      <div className="flex items-center gap-3">
+        {/* Wallet address badge */}
+        <div className="hidden sm:flex items-center gap-2 px-3 py-2 bg-gray-800/80 rounded-xl border border-gray-600/50">
           <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />
-          <span className="text-gray-400 text-sm font-mono">
+          <span className="text-gray-300 text-sm font-mono">
             {formatAddress(address!)}
           </span>
         </div>
+
+        {/* Sign In Button - Prominent */}
         <button
           onClick={handleSignIn}
-          className="group relative px-4 py-2.5 overflow-hidden rounded-xl font-semibold transition-all duration-300"
+          className="group relative px-6 py-2.5 overflow-hidden rounded-xl font-bold transition-all duration-300 shadow-lg shadow-green-500/25 hover:shadow-green-500/40"
         >
-          <div className="absolute inset-0 bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600" />
-          <div className="absolute inset-0 bg-gradient-to-r from-green-500 via-emerald-500 to-teal-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-          <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+          {/* Animated background */}
+          <div className="absolute inset-0 bg-gradient-to-r from-green-500 via-emerald-500 to-green-500 background-animate" />
+
+          {/* Glow effect */}
+          <div className="absolute -inset-1 bg-gradient-to-r from-green-400 to-emerald-400 rounded-xl blur opacity-40 group-hover:opacity-60 transition-opacity duration-300" />
+
+          {/* Shine effect */}
+          <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/30 to-transparent" />
+
+          {/* Content */}
           <div className="relative z-10 flex items-center gap-2 text-white">
-            <FaWallet className="w-4 h-4" />
-            <span>Sign In</span>
+            <FaWallet className="w-4 h-4 group-hover:animate-bounce" />
+            <span className="text-sm">Sign In</span>
           </div>
         </button>
+
+        {/* Disconnect button */}
         <button
           onClick={disconnect}
-          className="p-2.5 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all duration-300"
+          className="p-2.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl border border-gray-700/50 transition-all duration-300"
           title="Disconnect"
         >
           <FaSignOutAlt className="w-4 h-4" />

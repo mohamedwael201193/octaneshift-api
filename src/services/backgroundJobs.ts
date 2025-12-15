@@ -64,6 +64,7 @@ async function pollShiftStatuses(): Promise<void> {
 
           // Update shift status in store
           store.updateShiftJob(shift.id, { status: "refunded" });
+          await store.save();
 
           notifiedShifts.add(shift.id);
 
@@ -100,6 +101,11 @@ async function pollShiftStatuses(): Promise<void> {
         } else if (sideshiftStatus.status !== shift.status) {
           // Update status if changed
           store.updateShiftJob(shift.id, { status: sideshiftStatus.status });
+
+          // Save on status change
+          if (sideshiftStatus.status === "settled") {
+            await store.save();
+          }
 
           logger.debug(
             {

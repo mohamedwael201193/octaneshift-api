@@ -11,6 +11,21 @@ const api = axios.create({
   },
 });
 
+// Add request interceptor to include wallet auth token
+api.interceptors.request.use((config) => {
+  // Get wallet address from localStorage (set by useWallet hook)
+  const walletAddress = localStorage.getItem("octaneshift_wallet_address");
+  const isAuthenticated =
+    localStorage.getItem("octaneshift_wallet_auth") === "true";
+
+  // If authenticated, use wallet address as auth token
+  if (isAuthenticated && walletAddress) {
+    config.headers.Authorization = `Bearer ${walletAddress}`;
+  }
+
+  return config;
+});
+
 api.interceptors.response.use(
   (response) => response,
   (error) => {

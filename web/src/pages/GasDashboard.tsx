@@ -94,9 +94,9 @@ export default function GasDashboard() {
   const [walletAddress, setWalletAddress] = useState<string>("");
   const [savedAddress, setSavedAddress] = useState<string>("");
 
-  // Load saved address from localStorage on mount
+  // Load saved address from localStorage on mount - use same key as auth system
   useEffect(() => {
-    const saved = localStorage.getItem("octane_wallet_address");
+    const saved = localStorage.getItem("octaneshift_wallet_address");
     if (saved) {
       setWalletAddress(saved);
       setSavedAddress(saved);
@@ -180,7 +180,7 @@ export default function GasDashboard() {
       toast.error("Please enter a valid EVM address (0x...)");
       return;
     }
-    localStorage.setItem("octane_wallet_address", walletAddress);
+    localStorage.setItem("octaneshift_wallet_address", walletAddress);
     setSavedAddress(walletAddress);
     toast.success("Wallet address saved!");
   };

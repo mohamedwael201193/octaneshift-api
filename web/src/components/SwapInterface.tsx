@@ -207,8 +207,10 @@ export default function SwapInterface({
           addGasOnArrival: true,
         });
 
-        const mainSwap = gasResult.data.mainSwap;
-        const gasSwap = gasResult.data.gasOnArrival;
+        // Handle response - could be gasResult.data or gasResult directly
+        const responseData = gasResult.data || gasResult;
+        const mainSwap = responseData.mainSwap;
+        const gasSwap = responseData.gasOnArrival;
 
         setOrderDetails({
           shiftId: mainSwap.shiftId,
@@ -239,7 +241,7 @@ export default function SwapInterface({
         };
 
         const result = await octaneAPI.createShift(shiftData);
-        const shift = result.data;
+        const shift = result.shift || result.data || result;
 
         setOrderDetails({
           shiftId: shift.id,

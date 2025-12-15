@@ -58,4 +58,18 @@ input[type="number"] {
   .glow-purple {
     box-shadow: 0 0 20px rgba(123, 63, 242, 0.3);
   }
+
+  .background-animate {
+    background-size: 200% 100%;
+    animation: gradient-shift 2s ease infinite;
+  }
+}
+
+@keyframes gradient-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
 }

@@ -20,10 +20,10 @@ import api from "../services/api";
  * Uses wallet address if available, otherwise generates a random ID
  */
 function getUserId(): string {
-  // First check for wallet address (preferred)
-  const walletAddress = localStorage.getItem("octane_wallet_address");
+  // First check for wallet address (preferred) - use same key as auth system
+  const walletAddress = localStorage.getItem("octaneshift_wallet_address");
   if (walletAddress) {
-    return `wallet_${walletAddress.toLowerCase()}`;
+    return walletAddress.toLowerCase(); // Use raw address, no prefix
   }
 
   // Fall back to stored user ID or generate new one

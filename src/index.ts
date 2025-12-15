@@ -535,8 +535,8 @@ if (process.env.NODE_ENV === "development") {
 
 // API routes
 app.use("/api/meta", metaRoutes);
+app.use("/api/shifts", shiftsRoutes); // Must be before sideshiftRoutes to handle /recent
 app.use("/api", sideshiftRoutes);
-app.use("/api/shifts", shiftsRoutes);
 app.use("/api/checkout", checkoutRoutes);
 app.use("/api/notifications", notificationsRoutes);
 app.use("/api/deeplink", deeplinkRoutes);

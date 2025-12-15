@@ -110,8 +110,9 @@ export default function Proof() {
       }
 
       try {
+        // Use public endpoint - no auth required
         const response = await axios.get(
-          `${API_BASE_URL}/api/shifts/${shiftId}`
+          `${API_BASE_URL}/api/shifts/public/${shiftId}`
         );
         if (response.data.success) {
           setShift(response.data.data);

@@ -353,6 +353,9 @@ router.post(
         expiresAt: shift.expiresAt,
       });
 
+      // Persist to disk
+      await store.save();
+
       // Record to loyalty system
       const volumeUsd = parseFloat(shift.settleAmount || "0") * 2500; // Estimate USD value
       loyalty.recordShift(userId, shift.settleNetwork, volumeUsd, false, false);
@@ -578,6 +581,9 @@ router.post(
         expiresAt: shift.expiresAt,
       });
 
+      // Persist to disk
+      await store.save();
+
       // Record to loyalty system
       const depositMin = parseFloat(shift.depositMin || "0");
       const volumeUsd =
@@ -667,8 +673,50 @@ router.get("/recent", async (req, res) => {
 });
 
 /**
+ * GET /api/shifts/public/:id
+ * Public endpoint to get shift status by ID (for Proof page)
+ * No authentication required - anyone with shift ID can view
+ */
+router.get("/public/:id", async (req, res) => {
+  try {
+    const shiftId = req.params.id;
+    const userIp = (req as any).clientIp;
+
+    logger.info({ shiftId }, "Public shift lookup");
+
+    // Get fresh status from SideShift
+    const shift = await sideshift.getShift(shiftId, userIp);
+
+    res.json({
+      success: true,
+      data: shift,
+    });
+  } catch (error: any) {
+    logger.error(
+      { error, shiftId: req.params.id },
+      "Failed to get public shift status"
+    );
+
+    if (error.status === 404) {
+      res.status(404).json({
+        error: "Shift not found",
+      });
+    } else if (error.status && error.status < 500) {
+      res.status(error.status).json({
+        error: error.message || "Failed to get shift status",
+        code: error.code,
+      });
+    } else {
+      res.status(500).json({
+        error: "Internal server error",
+      });
+    }
+  }
+});
+
+/**
  * GET /api/shifts/:id
- * Get shift status by ID
+ * Get shift status by ID (authenticated - for user's own shifts)
  */
 router.get("/:id", authenticateToken, async (req, res) => {
   try {
