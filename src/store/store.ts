@@ -83,12 +83,88 @@ export interface Preset {
   createdAt: string;
 }
 
+export interface Gift {
+  id: string;
+  chain: string;
+  settleAmount: string;
+  settleAddress: string;
+  message?: string;
+  createdBy: string;
+  createdAt: string;
+  expiresAt?: number;
+}
+
+export interface LoyaltyStats {
+  id: string;
+  telegramId?: string;
+  lifetimeVolumeUsd: number;
+  totalShifts: number;
+  totalTopUps: number;
+  gasPacksDelivered: number;
+  zeroGasRescues: number;
+  freeTopupsAvailable: number;
+  freeTopupsUsed: number;
+  currentTier: string;
+  streakDays: number;
+  lastActiveDate: string;
+  joinedAt: string;
+  favoriteChain?: string;
+  chainStats: Record<string, { shifts: number; volume: number }>;
+}
+
+// ============================================
+// WALLET AUTH & REFERRAL TYPES
+// ============================================
+
+export interface WalletAuth {
+  id: string; // Same as walletAddress (lowercase)
+  walletAddress: string;
+  nonce: string;
+  nonceExpiresAt: number;
+  isAuthenticated: boolean;
+  lastAuthAt?: string;
+  referralCode: string; // Unique referral code for this user
+  referredBy?: string; // Referral code of the user who referred them
+  createdAt: string;
+}
+
+export interface Referral {
+  id: string;
+  referrerAddress: string; // Wallet that referred
+  referredAddress: string; // Wallet that was referred
+  referralCode: string; // Code used
+  shiftId?: string; // First shift from referred user
+  volumeGenerated: number; // Total volume from referred user
+  commissionsEarned: number; // 0.5% of volume (like SideShift)
+  status: "pending" | "active" | "inactive";
+  createdAt: string;
+  firstShiftAt?: string;
+}
+
+export interface UserActivity {
+  id: string;
+  walletAddress: string;
+  type: "shift" | "topup" | "gift" | "referral";
+  action: string;
+  details: Record<string, any>;
+  chain?: string;
+  amount?: string;
+  amountUsd?: number;
+  txHash?: string;
+  createdAt: string;
+}
+
 interface StoreData {
   users: User[];
   watchlists: Watchlist[];
   alerts: Alert[];
   shiftJobs: ShiftJob[];
   presets: Preset[];
+  gifts: Gift[];
+  loyaltyStats: LoyaltyStats[];
+  walletAuths: WalletAuth[];
+  referrals: Referral[];
+  userActivities: UserActivity[];
 }
 
 // ============================================
@@ -101,6 +177,11 @@ const store: StoreData = {
   alerts: [],
   shiftJobs: [],
   presets: [],
+  gifts: [],
+  loyaltyStats: [],
+  walletAuths: [],
+  referrals: [],
+  userActivities: [],
 };
 
 const STORE_FILE = path.join(process.cwd(), "data", "store.json");
@@ -125,6 +206,12 @@ export async function load(): Promise<void> {
     store.watchlists = parsed.watchlists || [];
     store.alerts = parsed.alerts || [];
     store.shiftJobs = parsed.shiftJobs || [];
+    store.presets = parsed.presets || [];
+    store.gifts = parsed.gifts || [];
+    store.loyaltyStats = parsed.loyaltyStats || [];
+    store.walletAuths = parsed.walletAuths || [];
+    store.referrals = parsed.referrals || [];
+    store.userActivities = parsed.userActivities || [];
 
     logger.info(
       {
@@ -132,6 +219,11 @@ export async function load(): Promise<void> {
         watchlists: store.watchlists.length,
         alerts: store.alerts.length,
         shiftJobs: store.shiftJobs.length,
+        gifts: store.gifts.length,
+        loyaltyStats: store.loyaltyStats.length,
+        walletAuths: store.walletAuths.length,
+        referrals: store.referrals.length,
+        userActivities: store.userActivities.length,
       },
       "Store loaded from disk"
     );
@@ -158,6 +250,11 @@ export async function save(): Promise<void> {
         watchlists: store.watchlists.length,
         alerts: store.alerts.length,
         shiftJobs: store.shiftJobs.length,
+        gifts: store.gifts.length,
+        loyaltyStats: store.loyaltyStats.length,
+        walletAuths: store.walletAuths.length,
+        referrals: store.referrals.length,
+        userActivities: store.userActivities.length,
       },
       "Store saved to disk"
     );
@@ -199,9 +296,9 @@ export function stopPeriodicSave(): void {
 // USER CRUD
 // ============================================
 
-export function createUser(user: Omit<User, "id">): User {
+export function createUser(user: Omit<User, "id">, customId?: string): User {
   const newUser: User = {
-    id: generateId(),
+    id: customId || generateId(),
     ...user,
   };
   store.users.push(newUser);
@@ -462,4 +559,372 @@ export function deletePreset(id: string): boolean {
 
   store.presets.splice(index, 1);
   return true;
+}
+
+// ============================================
+// GIFT CRUD
+// ============================================
+
+export function createGift(gift: Omit<Gift, "createdAt">): Gift {
+  const newGift: Gift = {
+    ...gift,
+    createdAt: new Date().toISOString(),
+  };
+  store.gifts.push(newGift);
+  return newGift;
+}
+
+export function getGift(id: string): Gift | undefined {
+  return store.gifts.find((g) => g.id === id);
+}
+
+export function getGiftsByUserId(userId: string): Gift[] {
+  return store.gifts.filter((g) => g.createdBy === userId);
+}
+
+export function getAllGifts(): Gift[] {
+  return [...store.gifts];
+}
+
+export function deleteGift(id: string): boolean {
+  const index = store.gifts.findIndex((g) => g.id === id);
+  if (index === -1) return false;
+
+  store.gifts.splice(index, 1);
+  return true;
+}
+
+export function cleanExpiredGifts(): number {
+  const now = Date.now();
+  const before = store.gifts.length;
+  store.gifts = store.gifts.filter((g) => !g.expiresAt || g.expiresAt > now);
+  return before - store.gifts.length;
+}
+
+// ============================================
+// LOYALTY STATS CRUD
+// ============================================
+
+export function getLoyaltyStats(userId: string): LoyaltyStats | undefined {
+  return store.loyaltyStats.find((s) => s.id === userId);
+}
+
+export function createLoyaltyStats(
+  userId: string,
+  telegramId?: string
+): LoyaltyStats {
+  const existingStats = getLoyaltyStats(userId);
+  if (existingStats) return existingStats;
+
+  const newStats: LoyaltyStats = {
+    id: userId,
+    telegramId,
+    lifetimeVolumeUsd: 0,
+    totalShifts: 0,
+    totalTopUps: 0,
+    gasPacksDelivered: 0,
+    zeroGasRescues: 0,
+    freeTopupsAvailable: 0,
+    freeTopupsUsed: 0,
+    currentTier: "Bronze",
+    streakDays: 0,
+    lastActiveDate: new Date().toISOString().split("T")[0],
+    joinedAt: new Date().toISOString(),
+    chainStats: {},
+  };
+  store.loyaltyStats.push(newStats);
+  return newStats;
+}
+
+export function updateLoyaltyStats(
+  userId: string,
+  updates: Partial<Omit<LoyaltyStats, "id" | "joinedAt">>
+): LoyaltyStats | undefined {
+  const stats = store.loyaltyStats.find((s) => s.id === userId);
+  if (!stats) return undefined;
+
+  Object.assign(stats, updates);
+  return stats;
+}
+
+export function getAllLoyaltyStats(): LoyaltyStats[] {
+  return [...store.loyaltyStats];
+}
+
+export function getTopLoyaltyUsers(limit: number = 10): LoyaltyStats[] {
+  return [...store.loyaltyStats]
+    .sort((a, b) => b.lifetimeVolumeUsd - a.lifetimeVolumeUsd)
+    .slice(0, limit);
+}
+
+// ============================================
+// WALLET AUTH CRUD
+// ============================================
+
+/**
+ * Generate a unique referral code (6 alphanumeric chars)
+ */
+function generateReferralCode(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // Avoid confusing chars
+  let code = "";
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  // Make sure it's unique
+  if (store.walletAuths.some((w) => w.referralCode === code)) {
+    return generateReferralCode();
+  }
+  return code;
+}
+
+/**
+ * Generate a random nonce for wallet signature
+ */
+function generateNonce(): string {
+  return `Sign this message to authenticate with OctaneShift:\n\nNonce: ${Math.random()
+    .toString(36)
+    .substring(2)}-${Date.now()}`;
+}
+
+export function createWalletAuth(walletAddress: string): WalletAuth {
+  const addr = walletAddress.toLowerCase();
+  const existing = store.walletAuths.find((w) => w.id === addr);
+  if (existing) {
+    // Refresh nonce for existing user
+    existing.nonce = generateNonce();
+    existing.nonceExpiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
+    return existing;
+  }
+
+  const newAuth: WalletAuth = {
+    id: addr,
+    walletAddress: walletAddress,
+    nonce: generateNonce(),
+    nonceExpiresAt: Date.now() + 5 * 60 * 1000,
+    isAuthenticated: false,
+    referralCode: generateReferralCode(),
+    createdAt: new Date().toISOString(),
+  };
+  store.walletAuths.push(newAuth);
+  return newAuth;
+}
+
+export function getWalletAuth(walletAddress: string): WalletAuth | undefined {
+  return store.walletAuths.find((w) => w.id === walletAddress.toLowerCase());
+}
+
+export function getWalletAuthByReferralCode(
+  code: string
+): WalletAuth | undefined {
+  return store.walletAuths.find((w) => w.referralCode === code.toUpperCase());
+}
+
+export function updateWalletAuth(
+  walletAddress: string,
+  updates: Partial<Omit<WalletAuth, "id" | "walletAddress" | "createdAt">>
+): WalletAuth | undefined {
+  const auth = store.walletAuths.find(
+    (w) => w.id === walletAddress.toLowerCase()
+  );
+  if (!auth) return undefined;
+
+  Object.assign(auth, updates);
+  return auth;
+}
+
+export function getAllWalletAuths(): WalletAuth[] {
+  return [...store.walletAuths];
+}
+
+// ============================================
+// REFERRAL CRUD
+// ============================================
+
+export function createReferral(
+  referrerAddress: string,
+  referredAddress: string,
+  referralCode: string
+): Referral {
+  const newReferral: Referral = {
+    id: generateId(),
+    referrerAddress: referrerAddress.toLowerCase(),
+    referredAddress: referredAddress.toLowerCase(),
+    referralCode: referralCode.toUpperCase(),
+    volumeGenerated: 0,
+    commissionsEarned: 0,
+    status: "pending",
+    createdAt: new Date().toISOString(),
+  };
+  store.referrals.push(newReferral);
+  return newReferral;
+}
+
+export function getReferral(id: string): Referral | undefined {
+  return store.referrals.find((r) => r.id === id);
+}
+
+export function getReferralsByReferrer(walletAddress: string): Referral[] {
+  return store.referrals.filter(
+    (r) => r.referrerAddress === walletAddress.toLowerCase()
+  );
+}
+
+export function getReferralByReferred(
+  walletAddress: string
+): Referral | undefined {
+  return store.referrals.find(
+    (r) => r.referredAddress === walletAddress.toLowerCase()
+  );
+}
+
+export function updateReferral(
+  id: string,
+  updates: Partial<Omit<Referral, "id" | "createdAt">>
+): Referral | undefined {
+  const referral = store.referrals.find((r) => r.id === id);
+  if (!referral) return undefined;
+
+  Object.assign(referral, updates);
+  return referral;
+}
+
+export function getAllReferrals(): Referral[] {
+  return [...store.referrals];
+}
+
+/**
+ * Add volume to a referral and calculate commission (0.5% like SideShift)
+ */
+export function addReferralVolume(
+  referredAddress: string,
+  volumeUsd: number
+): Referral | undefined {
+  const referral = getReferralByReferred(referredAddress);
+  if (!referral) return undefined;
+
+  referral.volumeGenerated += volumeUsd;
+  referral.commissionsEarned = referral.volumeGenerated * 0.005; // 0.5% commission
+
+  if (referral.status === "pending" && volumeUsd > 0) {
+    referral.status = "active";
+    referral.firstShiftAt = new Date().toISOString();
+  }
+
+  return referral;
+}
+
+/**
+ * Get referral stats for a wallet
+ */
+export function getReferralStats(walletAddress: string): {
+  totalReferrals: number;
+  activeReferrals: number;
+  totalVolume: number;
+  totalCommissions: number;
+  referralCode: string;
+  referrals: Referral[];
+} {
+  const addr = walletAddress.toLowerCase();
+  const auth = getWalletAuth(addr);
+  const referrals = getReferralsByReferrer(addr);
+
+  return {
+    totalReferrals: referrals.length,
+    activeReferrals: referrals.filter((r) => r.status === "active").length,
+    totalVolume: referrals.reduce((sum, r) => sum + r.volumeGenerated, 0),
+    totalCommissions: referrals.reduce(
+      (sum, r) => sum + r.commissionsEarned,
+      0
+    ),
+    referralCode: auth?.referralCode || "",
+    referrals,
+  };
+}
+
+// ============================================
+// USER ACTIVITY CRUD
+// ============================================
+
+export function createUserActivity(
+  activity: Omit<UserActivity, "id" | "createdAt">
+): UserActivity {
+  const newActivity: UserActivity = {
+    id: generateId(),
+    createdAt: new Date().toISOString(),
+    ...activity,
+  };
+  store.userActivities.push(newActivity);
+
+  // Keep only last 1000 activities per user to avoid memory bloat
+  const userActivities = store.userActivities.filter(
+    (a) => a.walletAddress === activity.walletAddress
+  );
+  if (userActivities.length > 1000) {
+    // Remove oldest
+    const oldest = userActivities[0];
+    const index = store.userActivities.findIndex((a) => a.id === oldest.id);
+    if (index !== -1) store.userActivities.splice(index, 1);
+  }
+
+  return newActivity;
+}
+
+export function getUserActivities(
+  walletAddress: string,
+  options?: {
+    type?: "shift" | "topup" | "gift" | "referral";
+    limit?: number;
+    offset?: number;
+  }
+): UserActivity[] {
+  let activities = store.userActivities.filter(
+    (a) => a.walletAddress === walletAddress.toLowerCase()
+  );
+
+  if (options?.type) {
+    activities = activities.filter((a) => a.type === options.type);
+  }
+
+  // Sort by newest first
+  activities.sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+
+  const offset = options?.offset || 0;
+  const limit = options?.limit || 50;
+
+  return activities.slice(offset, offset + limit);
+}
+
+export function getUserActivityStats(walletAddress: string): {
+  totalShifts: number;
+  totalTopUps: number;
+  totalGifts: number;
+  totalVolumeUsd: number;
+  lastActive: string | null;
+} {
+  const addr = walletAddress.toLowerCase();
+  const activities = store.userActivities.filter(
+    (a) => a.walletAddress === addr
+  );
+
+  const shifts = activities.filter((a) => a.type === "shift");
+  const topups = activities.filter((a) => a.type === "topup");
+  const gifts = activities.filter((a) => a.type === "gift");
+  const totalVolume = activities.reduce(
+    (sum, a) => sum + (a.amountUsd || 0),
+    0
+  );
+
+  return {
+    totalShifts: shifts.length,
+    totalTopUps: topups.length,
+    totalGifts: gifts.length,
+    totalVolumeUsd: totalVolume,
+    lastActive: activities.length > 0 ? activities[0].createdAt : null,
+  };
+}
+
+export function getAllUserActivities(): UserActivity[] {
+  return [...store.userActivities];
 }

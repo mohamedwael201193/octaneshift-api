@@ -12,7 +12,8 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import toast from "react-hot-toast";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { SUPPORTED_CHAINS } from "../config/chains";
 
 interface Recipient {
   settleAddress: string;
@@ -31,14 +32,25 @@ interface BatchResult {
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
+// Filter to only supported chains for batch top-up (EVM chains with native gas)
+const BATCH_SUPPORTED_CHAINS = SUPPORTED_CHAINS.filter((c) =>
+  ["eth", "base", "arb", "op", "pol", "avax"].includes(c.id)
+);
+
 export default function BatchTopUp() {
+  const navigate = useNavigate();
   const [recipients, setRecipients] = useState<Recipient[]>([
     { settleAddress: "", settleAmount: "" },
   ]);
-  const [chain, setChain] = useState("eth"); // Use backend's expected chain ID
+  const [chain, setChain] = useState("eth");
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<BatchResult[]>([]);
   const [payoutId, setPayoutId] = useState<string>("");
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+  const selectedChain =
+    BATCH_SUPPORTED_CHAINS.find((c) => c.id === chain) ||
+    BATCH_SUPPORTED_CHAINS[0];
 
   const addRecipient = () => {
     if (recipients.length >= 50) {
@@ -125,9 +137,44 @@ export default function BatchTopUp() {
       if (response.data.success) {
         setResults(response.data.data.results);
         setPayoutId(response.data.data.payoutId);
-        toast.success(
-          `Batch created! ${response.data.data.summary.success}/${response.data.data.summary.total} successful`
-        );
+
+        const successCount = response.data.data.summary.success;
+        const total = response.data.data.summary.total;
+
+        toast.success(`Batch created! ${successCount}/${total} successful`);
+
+        // If single shift created, offer to view it
+        if (successCount === 1) {
+          const firstSuccess = response.data.data.results.find(
+            (r: BatchResult) => r.status === "created"
+          );
+          if (firstSuccess?.shiftId) {
+            toast(
+              (t) => (
+                <div className="flex items-center gap-3">
+                  <span>Shift created!</span>
+                  <button
+                    onClick={() => {
+                      toast.dismiss(t.id);
+                      navigate(`/proof/${firstSuccess.shiftId}`);
+                    }}
+                    className="px-3 py-1 bg-cyan-600 hover:bg-cyan-700 text-white rounded text-sm font-medium"
+                  >
+                    View Order
+                  </button>
+                </div>
+              ),
+              { duration: 10000 }
+            );
+          }
+        }
+
+        // Scroll to results
+        setTimeout(() => {
+          document
+            .getElementById("batch-results")
+            ?.scrollIntoView({ behavior: "smooth" });
+        }, 100);
       }
     } catch (err: any) {
       console.error("Batch error:", err.response?.data);
@@ -166,24 +213,91 @@ export default function BatchTopUp() {
               <label className="block text-sm text-gray-400 mb-2">
                 Target Network (Where gas will be sent)
               </label>
-              <select
-                value={chain}
-                onChange={(e) => setChain(e.target.value)}
-                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white"
-              >
-                <option value="eth">Ethereum</option>
-                <option value="base">Base</option>
-                <option value="pol">Polygon</option>
-                <option value="arb">Arbitrum</option>
-                <option value="op">Optimism</option>
-                <option value="avax">Avalanche</option>
-              </select>
+
+              {/* Custom Network Selector with Icons */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                  className="w-full flex items-center gap-3 bg-gray-900 border border-gray-700 hover:border-gray-600 rounded-xl px-4 py-3 text-white transition-colors"
+                >
+                  {/* Selected Chain Icon */}
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center"
+                    style={{ backgroundColor: `${selectedChain.color}20` }}
+                  >
+                    <selectedChain.icon
+                      className="w-5 h-5"
+                      style={{ color: selectedChain.color }}
+                    />
+                  </div>
+                  <div className="flex-1 text-left">
+                    <div className="font-medium">{selectedChain.name}</div>
+                    <div className="text-xs text-gray-500">
+                      Native: {selectedChain.symbol}
+                    </div>
+                  </div>
+                  <svg
+                    className={`w-5 h-5 text-gray-400 transition-transform ${
+                      isDropdownOpen ? "rotate-180" : ""
+                    }`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 9l-7 7-7-7"
+                    />
+                  </svg>
+                </button>
+
+                {/* Dropdown */}
+                {isDropdownOpen && (
+                  <div className="absolute z-50 mt-2 w-full bg-gray-900 border border-gray-700 rounded-xl shadow-xl overflow-hidden">
+                    {BATCH_SUPPORTED_CHAINS.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => {
+                          setChain(c.id);
+                          setIsDropdownOpen(false);
+                        }}
+                        className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors ${
+                          chain === c.id ? "bg-white/10" : ""
+                        }`}
+                      >
+                        <div
+                          className="w-8 h-8 rounded-full flex items-center justify-center"
+                          style={{ backgroundColor: `${c.color}20` }}
+                        >
+                          <c.icon
+                            className="w-5 h-5"
+                            style={{ color: c.color }}
+                          />
+                        </div>
+                        <div className="flex-1 text-left">
+                          <div className="font-medium text-white">{c.name}</div>
+                          <div className="text-xs text-gray-500">
+                            Native: {c.symbol}
+                          </div>
+                        </div>
+                        {chain === c.id && (
+                          <CheckCircle className="w-5 h-5 text-green-400" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             <div className="flex items-end">
-              <div className="bg-blue-900/20 border border-blue-700/50 rounded-lg px-4 py-2 w-full">
+              <div className="bg-blue-900/20 border border-blue-700/50 rounded-xl px-4 py-3 w-full">
                 <div className="text-xs text-blue-400 mb-1">Payment Method</div>
                 <div className="text-sm text-white">
-                  You'll pay with USDT/USDC
+                  You'll pay with USDT/USDC on any supported chain
                 </div>
               </div>
             </div>
@@ -297,6 +411,7 @@ export default function BatchTopUp() {
         {/* Results */}
         {results.length > 0 && (
           <motion.div
+            id="batch-results"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="mt-8 bg-gray-800/50 border border-gray-700 rounded-xl p-6"
@@ -338,15 +453,15 @@ export default function BatchTopUp() {
                   </div>
                   {result.shiftId && (
                     <div className="flex items-center gap-2">
-                      <span className="text-gray-400 text-xs font-mono">
+                      <span className="text-gray-400 text-xs font-mono hidden sm:inline">
                         {result.shiftId}
                       </span>
                       <Link
                         to={`/proof/${result.shiftId}`}
-                        className="inline-flex items-center gap-1 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs transition-colors"
+                        className="inline-flex items-center gap-1 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg text-sm font-semibold transition-colors"
                       >
-                        View Proof
-                        <ExternalLink className="w-3 h-3" />
+                        View Order
+                        <ExternalLink className="w-4 h-4" />
                       </Link>
                     </div>
                   )}

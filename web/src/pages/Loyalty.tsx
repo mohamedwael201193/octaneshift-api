@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
 import {
   FaChartLine,
   FaCheckCircle,
@@ -14,15 +15,24 @@ import {
 } from "react-icons/fa";
 import api from "../services/api";
 
-// Mock user ID for demo - in production would come from auth
-const DEMO_USER_ID =
-  "demo-user-" +
-  (localStorage.getItem("octane_user_id") ||
-    Math.random().toString(36).substr(2, 9));
+/**
+ * Get or create a persistent user ID
+ * Uses wallet address if available, otherwise generates a random ID
+ */
+function getUserId(): string {
+  // First check for wallet address (preferred)
+  const walletAddress = localStorage.getItem("octane_wallet_address");
+  if (walletAddress) {
+    return `wallet_${walletAddress.toLowerCase()}`;
+  }
 
-// Save user ID to localStorage
-if (!localStorage.getItem("octane_user_id")) {
-  localStorage.setItem("octane_user_id", DEMO_USER_ID);
+  // Fall back to stored user ID or generate new one
+  let userId = localStorage.getItem("octane_user_id");
+  if (!userId) {
+    userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    localStorage.setItem("octane_user_id", userId);
+  }
+  return userId;
 }
 
 interface LoyaltyStats {
@@ -74,38 +84,17 @@ export default function Loyalty() {
   const [loading, setLoading] = useState(true);
   const [claiming, setClaiming] = useState(false);
   const [claimSuccess, setClaimSuccess] = useState(false);
-  const [rewardHistory] = useState<RewardHistory[]>([
-    {
-      id: "1",
-      type: "Free Gas Top-up",
-      amount: 1,
-      date: "2024-01-15",
-      status: "claimed",
-    },
-    {
-      id: "2",
-      type: "Volume Bonus",
-      amount: 5,
-      date: "2024-01-10",
-      status: "claimed",
-    },
-    {
-      id: "3",
-      type: "Streak Reward",
-      amount: 2,
-      date: "2024-01-05",
-      status: "claimed",
-    },
-  ]);
+  const [userId] = useState(() => getUserId());
+  const [rewardHistory] = useState<RewardHistory[]>([]);
 
   useEffect(() => {
     fetchLoyaltyStats();
-  }, []);
+  }, [userId]);
 
   const fetchLoyaltyStats = async () => {
     setLoading(true);
     try {
-      const response = await api.getLoyaltyStats(DEMO_USER_ID);
+      const response = await api.getLoyaltyStats(userId);
       // Handle API response - ensure all required fields exist
       const data = response.data || response;
 
@@ -122,12 +111,16 @@ export default function Loyalty() {
       }
 
       setStats({
-        userId: data.userId || DEMO_USER_ID,
+        userId: data.userId || userId,
         tier:
-          (tierName as "bronze" | "silver" | "gold" | "platinum") || "bronze",
+          (tierName.toLowerCase() as
+            | "bronze"
+            | "silver"
+            | "gold"
+            | "platinum") || "bronze",
         totalVolume: data.totalVolume || data.lifetimeVolumeUsd || 0,
         totalShifts: data.totalShifts || 0,
-        totalGasTopups: data.totalGasTopups || data.gasTopups || 0,
+        totalGasTopups: data.totalGasTopups || data.gasPacksDelivered || 0,
         freeTopupsAvailable: data.freeTopupsAvailable || 0,
         freeTopupsUsed: data.freeTopupsUsed || 0,
         nextTierProgress:
@@ -135,37 +128,63 @@ export default function Loyalty() {
           data.totalVolume ||
           data.lifetimeVolumeUsd ||
           0,
-        nextTierRequirement: data.nextTierRequirement || 500,
+        nextTierRequirement:
+          data.nextTierRequirement || getNextTierRequirement(tierName),
         benefits: Array.isArray(data.benefits)
           ? data.benefits
-          : ["0.1% fee discount", "Priority support"],
-        joinDate: data.joinDate || data.createdAt || new Date().toISOString(),
+          : getTierBenefits(tierName),
+        joinDate: data.joinDate || data.joinedAt || new Date().toISOString(),
         streakDays: data.streakDays || 0,
       });
     } catch (err) {
-      // Generate mock stats for demo
+      // Start fresh for new users - no mock data
       setStats({
-        userId: DEMO_USER_ID,
-        tier: "silver",
-        totalVolume: 847.5,
-        totalShifts: 23,
-        totalGasTopups: 15,
-        freeTopupsAvailable: 2,
-        freeTopupsUsed: 3,
-        nextTierProgress: 847.5,
-        nextTierRequirement: 2000,
-        benefits: [
-          "0.1% fee discount",
-          "Priority support",
-          "Early access to features",
-          "1 free top-up per $500 volume",
-        ],
-        joinDate: "2024-01-01",
-        streakDays: 7,
+        userId: userId,
+        tier: "bronze",
+        totalVolume: 0,
+        totalShifts: 0,
+        totalGasTopups: 0,
+        freeTopupsAvailable: 0,
+        freeTopupsUsed: 0,
+        nextTierProgress: 0,
+        nextTierRequirement: 200,
+        benefits: getTierBenefits("bronze"),
+        joinDate: new Date().toISOString(),
+        streakDays: 0,
       });
     } finally {
       setLoading(false);
     }
+  };
+
+  const getNextTierRequirement = (currentTier: string): number => {
+    const tiers: Record<string, number> = {
+      bronze: 200,
+      silver: 1000,
+      gold: 5000,
+      platinum: Infinity,
+    };
+    return tiers[currentTier.toLowerCase()] || 200;
+  };
+
+  const getTierBenefits = (tier: string): string[] => {
+    const benefits: Record<string, string[]> = {
+      bronze: ["Track your progress", "Basic support"],
+      silver: ["1 free top-up", "Priority support", "0.1% fee savings"],
+      gold: [
+        "2 free top-ups",
+        "Premium support",
+        "0.2% fee savings",
+        "Early access",
+      ],
+      platinum: [
+        "5 free top-ups",
+        "VIP support",
+        "0.5% fee savings",
+        "Exclusive features",
+      ],
+    };
+    return benefits[tier.toLowerCase()] || benefits.bronze;
   };
 
   const claimReward = async () => {
@@ -173,8 +192,9 @@ export default function Loyalty() {
 
     setClaiming(true);
     try {
-      await api.useFreeTopup(DEMO_USER_ID);
+      await api.useFreeTopup(userId);
       setClaimSuccess(true);
+      toast.success("Free top-up claimed! Use it on your next gas purchase.");
       setStats((prev) =>
         prev
           ? {
@@ -187,17 +207,7 @@ export default function Loyalty() {
 
       setTimeout(() => setClaimSuccess(false), 3000);
     } catch (err) {
-      // Demo: simulate success
-      setClaimSuccess(true);
-      setStats((prev) =>
-        prev
-          ? {
-              ...prev,
-              freeTopupsAvailable: prev.freeTopupsAvailable - 1,
-              freeTopupsUsed: prev.freeTopupsUsed + 1,
-            }
-          : null
-      );
+      toast.error("Failed to claim reward. Please try again.");
       setTimeout(() => setClaimSuccess(false), 3000);
     } finally {
       setClaiming(false);

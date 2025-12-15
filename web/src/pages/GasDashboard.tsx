@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
 import {
   FaArrowDown,
   FaArrowUp,
@@ -10,6 +11,7 @@ import {
   FaExclamationTriangle,
   FaGasPump,
   FaPlus,
+  FaSearch,
   FaSyncAlt,
   FaWallet,
 } from "react-icons/fa";
@@ -29,25 +31,35 @@ interface GasPrice {
 
 interface ChainBalance {
   chain: string;
+  chainName: string;
   symbol: string;
   balance: number;
-  balanceUSD: number;
+  balanceFormatted: string;
+  balanceUSD?: number;
   txsRemaining: number;
   healthStatus: "healthy" | "low" | "critical";
+  costPerTx: number;
+  error: string | null;
 }
 
 interface GasPreset {
-  name: string;
+  label: string;
   description: string;
-  amount: number;
+  amountNative: number;
+  amountUsd: number;
   txCount: number;
 }
 
 const chainIcons: { [key: string]: string } = {
+  eth: "⟠",
   ethereum: "⟠",
+  pol: "⬡",
   polygon: "⬡",
+  arb: "🔷",
   arbitrum: "🔷",
+  op: "🔴",
   optimism: "🔴",
+  avax: "🔺",
   avalanche: "🔺",
   bsc: "🟡",
   solana: "◎",
@@ -55,10 +67,15 @@ const chainIcons: { [key: string]: string } = {
 };
 
 const chainColors: { [key: string]: string } = {
+  eth: "from-blue-500 to-purple-500",
   ethereum: "from-blue-500 to-purple-500",
+  pol: "from-purple-500 to-pink-500",
   polygon: "from-purple-500 to-pink-500",
+  arb: "from-blue-400 to-blue-600",
   arbitrum: "from-blue-400 to-blue-600",
+  op: "from-red-500 to-red-700",
   optimism: "from-red-500 to-red-700",
+  avax: "from-red-400 to-red-600",
   avalanche: "from-red-400 to-red-600",
   bsc: "from-yellow-400 to-yellow-600",
   solana: "from-purple-400 to-green-400",
@@ -68,211 +85,116 @@ const chainColors: { [key: string]: string } = {
 export default function GasDashboard() {
   const [gasPrices, setGasPrices] = useState<GasPrice[]>([]);
   const [balances, setBalances] = useState<ChainBalance[]>([]);
-  const [selectedChain, setSelectedChain] = useState<string>("ethereum");
+  const [selectedChain, setSelectedChain] = useState<string>("eth");
   const [presets, setPresets] = useState<GasPreset[]>([]);
   const [loading, setLoading] = useState(true);
+  const [balancesLoading, setBalancesLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [walletAddress, setWalletAddress] = useState<string>("");
+  const [savedAddress, setSavedAddress] = useState<string>("");
+
+  // Load saved address from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem("octane_wallet_address");
+    if (saved) {
+      setWalletAddress(saved);
+      setSavedAddress(saved);
+    }
+  }, []);
 
   useEffect(() => {
-    fetchAllData();
+    fetchGasPrices();
 
     // Auto-refresh every 30 seconds
     const interval = setInterval(() => {
       if (autoRefresh) {
-        fetchAllData();
+        fetchGasPrices();
+        if (savedAddress) {
+          fetchBalances(savedAddress);
+        }
       }
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [autoRefresh]);
+  }, [autoRefresh, savedAddress]);
 
   useEffect(() => {
     fetchPresets(selectedChain);
   }, [selectedChain]);
 
-  const fetchAllData = async () => {
+  // Fetch balances when savedAddress changes
+  useEffect(() => {
+    if (savedAddress) {
+      fetchBalances(savedAddress);
+    }
+  }, [savedAddress]);
+
+  const fetchGasPrices = async () => {
     setLoading(true);
     try {
       const response = await api.getGasPrices();
       // Transform the prices object into an array
-      const pricesArray = Object.entries(response.data.prices || {}).map(
+      const pricesArray = Object.entries(response.prices || {}).map(
         ([chain, data]: [string, any]) => ({
           chain,
           symbol: data.symbol || chain.toUpperCase(),
-          gasPrice: data.gasPrice || "0",
+          gasPrice: `${data.gasPriceGwei?.toFixed(2) || "0"} gwei`,
           gasPriceGwei: data.gasPriceGwei,
-          costPerTx: data.costPerTx || 0,
-          unit: data.unit || "gwei",
-          trend: Math.random() > 0.5 ? "up" : ("down" as "up" | "down"),
-          change24h: Math.random() * 20 - 10,
+          costPerTx: data.costPerTxUsd || 0,
+          unit: "gwei",
+          trend: "stable" as const,
+          change24h: 0,
         })
       );
-      setGasPrices(pricesArray.length > 0 ? pricesArray : getMockGasPrices());
+      setGasPrices(pricesArray);
     } catch (err) {
-      setGasPrices(getMockGasPrices());
+      console.error("Failed to fetch gas prices:", err);
+      toast.error("Failed to fetch gas prices");
     }
-
-    // Mock balances for demo
-    setBalances(getMockBalances());
     setLastUpdated(new Date());
     setLoading(false);
+  };
+
+  const fetchBalances = async (address: string) => {
+    if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
+      return;
+    }
+
+    setBalancesLoading(true);
+    try {
+      const response = await api.getWalletBalances(address);
+      if (response.success && response.data?.balances) {
+        setBalances(response.data.balances);
+      }
+    } catch (err) {
+      console.error("Failed to fetch balances:", err);
+      toast.error("Failed to fetch wallet balances");
+    }
+    setBalancesLoading(false);
+  };
+
+  const handleAddressSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!walletAddress || !/^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
+      toast.error("Please enter a valid EVM address (0x...)");
+      return;
+    }
+    localStorage.setItem("octane_wallet_address", walletAddress);
+    setSavedAddress(walletAddress);
+    toast.success("Wallet address saved!");
   };
 
   const fetchPresets = async (chain: string) => {
     try {
       const response = await api.getSmartPresets(chain);
-      setPresets(response.data.presets || getMockPresets());
+      if (response.presets) {
+        setPresets(response.presets);
+      }
     } catch (err) {
-      setPresets(getMockPresets());
+      console.error("Failed to fetch presets:", err);
     }
   };
-
-  const getMockGasPrices = (): GasPrice[] => [
-    {
-      chain: "ethereum",
-      symbol: "ETH",
-      gasPrice: "25 gwei",
-      gasPriceGwei: 25,
-      costPerTx: 1.5,
-      unit: "gwei",
-      trend: "down",
-      change24h: -5.2,
-    },
-    {
-      chain: "polygon",
-      symbol: "MATIC",
-      gasPrice: "150 gwei",
-      gasPriceGwei: 150,
-      costPerTx: 0.01,
-      unit: "gwei",
-      trend: "up",
-      change24h: 12.5,
-    },
-    {
-      chain: "arbitrum",
-      symbol: "ETH",
-      gasPrice: "0.1 gwei",
-      gasPriceGwei: 0.1,
-      costPerTx: 0.15,
-      unit: "gwei",
-      trend: "stable",
-      change24h: 0.5,
-    },
-    {
-      chain: "optimism",
-      symbol: "ETH",
-      gasPrice: "0.05 gwei",
-      gasPriceGwei: 0.05,
-      costPerTx: 0.12,
-      unit: "gwei",
-      trend: "down",
-      change24h: -3.1,
-    },
-    {
-      chain: "avalanche",
-      symbol: "AVAX",
-      gasPrice: "25 nAVAX",
-      costPerTx: 0.08,
-      unit: "nAVAX",
-      trend: "up",
-      change24h: 8.3,
-    },
-    {
-      chain: "bsc",
-      symbol: "BNB",
-      gasPrice: "3 gwei",
-      gasPriceGwei: 3,
-      costPerTx: 0.05,
-      unit: "gwei",
-      trend: "stable",
-      change24h: 1.2,
-    },
-    {
-      chain: "solana",
-      symbol: "SOL",
-      gasPrice: "0.000005",
-      costPerTx: 0.0001,
-      unit: "SOL",
-      trend: "down",
-      change24h: -2.4,
-    },
-    {
-      chain: "base",
-      symbol: "ETH",
-      gasPrice: "0.02 gwei",
-      gasPriceGwei: 0.02,
-      costPerTx: 0.08,
-      unit: "gwei",
-      trend: "down",
-      change24h: -7.8,
-    },
-  ];
-
-  const getMockBalances = (): ChainBalance[] => [
-    {
-      chain: "ethereum",
-      symbol: "ETH",
-      balance: 0.025,
-      balanceUSD: 85,
-      txsRemaining: 56,
-      healthStatus: "healthy",
-    },
-    {
-      chain: "polygon",
-      symbol: "MATIC",
-      balance: 2.5,
-      balanceUSD: 2.5,
-      txsRemaining: 250,
-      healthStatus: "healthy",
-    },
-    {
-      chain: "arbitrum",
-      symbol: "ETH",
-      balance: 0.008,
-      balanceUSD: 27,
-      txsRemaining: 180,
-      healthStatus: "healthy",
-    },
-    {
-      chain: "optimism",
-      symbol: "ETH",
-      balance: 0.002,
-      balanceUSD: 6.8,
-      txsRemaining: 56,
-      healthStatus: "low",
-    },
-    {
-      chain: "base",
-      symbol: "ETH",
-      balance: 0.0005,
-      balanceUSD: 1.7,
-      txsRemaining: 21,
-      healthStatus: "critical",
-    },
-  ];
-
-  const getMockPresets = (): GasPreset[] => [
-    {
-      name: "+1 Transaction",
-      description: "Emergency top-up",
-      amount: 2,
-      txCount: 1,
-    },
-    {
-      name: "+5 Transactions",
-      description: "Standard top-up",
-      amount: 8,
-      txCount: 5,
-    },
-    {
-      name: "+1 Day",
-      description: "Based on your usage",
-      amount: 15,
-      txCount: 12,
-    },
-    { name: "+1 Week", description: "Best value", amount: 50, txCount: 50 },
-  ];
 
   const getHealthColor = (status: string) => {
     switch (status) {
@@ -300,11 +222,13 @@ export default function GasDashboard() {
     }
   };
 
-  const totalBalanceUSD = balances.reduce((acc, b) => acc + b.balanceUSD, 0);
   const criticalChains = balances.filter(
     (b) => b.healthStatus === "critical"
   ).length;
   const lowChains = balances.filter((b) => b.healthStatus === "low").length;
+  const healthyChains = balances.filter(
+    (b) => b.healthStatus === "healthy"
+  ).length;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 py-12 px-4">
@@ -338,7 +262,10 @@ export default function GasDashboard() {
               Auto-refresh
             </button>
             <button
-              onClick={fetchAllData}
+              onClick={() => {
+                fetchGasPrices();
+                if (savedAddress) fetchBalances(savedAddress);
+              }}
               disabled={loading}
               className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50"
             >
@@ -348,6 +275,46 @@ export default function GasDashboard() {
           </div>
         </motion.div>
 
+        {/* Wallet Address Input */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-gray-800/50 rounded-xl p-6 mb-8"
+        >
+          <form onSubmit={handleAddressSubmit} className="flex gap-4">
+            <div className="flex-1">
+              <label className="block text-sm text-gray-400 mb-2">
+                <FaWallet className="inline mr-2" />
+                Your Wallet Address
+              </label>
+              <input
+                type="text"
+                value={walletAddress}
+                onChange={(e) => setWalletAddress(e.target.value)}
+                placeholder="0x..."
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
+              />
+            </div>
+            <div className="flex items-end">
+              <button
+                type="submit"
+                className="flex items-center gap-2 px-6 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+              >
+                <FaSearch />
+                Track Wallet
+              </button>
+            </div>
+          </form>
+          {savedAddress && (
+            <p className="text-sm text-gray-400 mt-2">
+              Tracking:{" "}
+              <span className="text-orange-400 font-mono">
+                {savedAddress.slice(0, 10)}...{savedAddress.slice(-8)}
+              </span>
+            </p>
+          )}
+        </motion.div>
+
         {/* Stats Overview */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           <motion.div
@@ -355,12 +322,12 @@ export default function GasDashboard() {
             animate={{ opacity: 1, y: 0 }}
             className="bg-gray-800/50 rounded-xl p-6"
           >
-            <div className="text-gray-400 text-sm mb-1">Total Gas Balance</div>
+            <div className="text-gray-400 text-sm mb-1">Tracked Chains</div>
             <div className="text-3xl font-bold text-white">
-              ${totalBalanceUSD.toFixed(2)}
+              {balances.length}
             </div>
             <div className="text-green-400 text-sm mt-1">
-              Across {balances.length} chains
+              {savedAddress ? "Live balances" : "Enter wallet to track"}
             </div>
           </motion.div>
 
@@ -372,7 +339,9 @@ export default function GasDashboard() {
           >
             <div className="text-gray-400 text-sm mb-1">Health Status</div>
             <div className="flex items-center gap-2">
-              {criticalChains > 0 ? (
+              {!savedAddress ? (
+                <span className="text-gray-400">No wallet tracked</span>
+              ) : criticalChains > 0 ? (
                 <>
                   <FaExclamationTriangle className="text-red-400 text-2xl" />
                   <span className="text-2xl font-bold text-red-400">
@@ -386,13 +355,15 @@ export default function GasDashboard() {
                     {lowChains} Low
                   </span>
                 </>
-              ) : (
+              ) : balances.length > 0 ? (
                 <>
                   <FaCheckCircle className="text-green-400 text-2xl" />
                   <span className="text-2xl font-bold text-green-400">
                     All Good
                   </span>
                 </>
+              ) : (
+                <span className="text-gray-400">-</span>
               )}
             </div>
           </motion.div>
@@ -617,7 +588,7 @@ export default function GasDashboard() {
                       {balance.balance} {balance.symbol}
                     </div>
                     <div className="text-gray-400">
-                      ${balance.balanceUSD.toFixed(2)}
+                      ${(balance.balanceUSD ?? 0).toFixed(2)}
                     </div>
                   </div>
                   <div className="text-right">

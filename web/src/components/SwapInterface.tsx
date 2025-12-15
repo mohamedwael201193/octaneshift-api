@@ -195,26 +195,61 @@ export default function SwapInterface({
       const [depositCoin, depositNetwork] = fromToken.split("-");
       const [settleCoin, settleNetwork] = toChain.split("-");
 
-      const shiftData = {
-        depositCoin: depositCoin.toUpperCase(),
-        depositNetwork,
-        settleCoin: settleCoin.toUpperCase(),
-        settleNetwork,
-        settleAddress,
-        ...(settleMemo && { settleMemo }),
-      };
+      // Use Gas-on-Arrival API if enabled, otherwise regular shift API
+      if (gasOnArrivalEnabled) {
+        const gasResult = await octaneAPI.createGasOnArrivalShift({
+          depositCoin: depositCoin.toUpperCase(),
+          depositNetwork,
+          settleCoin: settleCoin.toUpperCase(),
+          settleNetwork,
+          settleAddress,
+          ...(settleMemo && { settleMemo }),
+          addGasOnArrival: true,
+        });
 
-      const result = await octaneAPI.createShift(shiftData);
-      const shift = result.data;
+        const mainSwap = gasResult.data.mainSwap;
+        const gasSwap = gasResult.data.gasOnArrival;
 
-      setOrderDetails({
-        shiftId: shift.id,
-        depositAddress: shift.depositAddress,
-        depositAmount: amount,
-        depositCoin: depositCoin.toUpperCase(),
-      });
+        setOrderDetails({
+          shiftId: mainSwap.shiftId,
+          depositAddress: mainSwap.depositAddress,
+          depositAmount: amount,
+          depositCoin: depositCoin.toUpperCase(),
+          ...(gasSwap && {
+            gasShiftId: gasSwap.shiftId,
+            gasDepositAddress: gasSwap.depositAddress,
+            gasAmount: gasSwap.gasInfo?.recommendedAmount?.toString(),
+            gasSymbol: gasSwap.gasInfo?.symbol,
+          }),
+        });
 
-      toast.success("Order created successfully!");
+        toast.success(
+          gasSwap
+            ? "Order created with Gas-on-Arrival! You'll receive tokens + gas."
+            : "Order created successfully!"
+        );
+      } else {
+        const shiftData = {
+          depositCoin: depositCoin.toUpperCase(),
+          depositNetwork,
+          settleCoin: settleCoin.toUpperCase(),
+          settleNetwork,
+          settleAddress,
+          ...(settleMemo && { settleMemo }),
+        };
+
+        const result = await octaneAPI.createShift(shiftData);
+        const shift = result.data;
+
+        setOrderDetails({
+          shiftId: shift.id,
+          depositAddress: shift.depositAddress,
+          depositAmount: amount,
+          depositCoin: depositCoin.toUpperCase(),
+        });
+
+        toast.success("Order created successfully!");
+      }
 
       setTimeout(() => {
         document
@@ -223,6 +258,7 @@ export default function SwapInterface({
       }, 100);
     } catch (error: any) {
       console.error(error);
+      toast.error(error.message || "Failed to create order");
     } finally {
       setIsCreatingShift(false);
     }

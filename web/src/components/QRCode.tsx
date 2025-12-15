@@ -56,8 +56,8 @@ export default function QRCode({
   showExplorer = false,
   explorerUrl,
   className = "",
-  darkColor = "#22c55e",
-  lightColor = "#ffffff",
+  darkColor = "#000000", // Black for better scanning
+  lightColor = "#ffffff", // White background
 }: QRCodeProps) {
   const [qrDataUrl, setQrDataUrl] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);

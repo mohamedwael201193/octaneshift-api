@@ -56,12 +56,76 @@ interface SmartPreset {
 const gasCache: Record<string, GasPrice> = {};
 const CACHE_TTL_MS = 30000; // 30 seconds
 
-// Native token prices in USD (updated periodically)
+// Native token prices in USD (updated periodically via CoinGecko)
 let nativePrices: Record<string, number> = {
   eth: 2200,
   pol: 0.5,
   avax: 35,
 };
+let pricesLastUpdated = 0;
+const PRICES_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+// CoinGecko IDs for native tokens
+const COINGECKO_IDS: Record<string, string> = {
+  eth: "ethereum",
+  pol: "matic-network",
+  avax: "avalanche-2",
+};
+
+/**
+ * Fetch native token prices from CoinGecko
+ */
+async function fetchNativePrices(): Promise<void> {
+  // Check if cache is still valid
+  if (Date.now() - pricesLastUpdated < PRICES_CACHE_TTL_MS) {
+    return;
+  }
+
+  try {
+    const ids = Object.values(COINGECKO_IDS).join(",");
+    const response = await fetch(
+      `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`,
+      {
+        headers: {
+          Accept: "application/json",
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`CoinGecko API error: ${response.status}`);
+    }
+
+    const data = (await response.json()) as Record<string, { usd: number }>;
+
+    // Map CoinGecko IDs back to our chain keys
+    for (const [chainKey, geckoId] of Object.entries(COINGECKO_IDS)) {
+      if (data[geckoId]?.usd) {
+        nativePrices[chainKey] = data[geckoId].usd;
+      }
+    }
+
+    pricesLastUpdated = Date.now();
+    logger.info(
+      { prices: nativePrices },
+      "Updated native token prices from CoinGecko"
+    );
+  } catch (error) {
+    logger.warn(
+      { error },
+      "Failed to fetch prices from CoinGecko, using cached values"
+    );
+    // Keep using existing cached prices
+  }
+}
+
+/**
+ * Get current native prices (refreshes from CoinGecko if needed)
+ */
+export async function getNativePrices(): Promise<Record<string, number>> {
+  await fetchNativePrices();
+  return { ...nativePrices };
+}
 
 /**
  * Fetch gas price from RPC
@@ -145,6 +209,9 @@ export async function getGasPrice(chain: string): Promise<GasPrice> {
   ) {
     return cached;
   }
+
+  // Refresh native prices
+  await fetchNativePrices();
 
   const gasPriceGwei = await fetchGasPrice(chain);
   const gasLimit = AVG_GAS_LIMITS[chain] || 21000;
@@ -362,9 +429,13 @@ export async function getGasOnArrivalRecommendation(
 export default {
   getGasPrice,
   getAllGasPrices,
+  getGasPrices: getAllGasPrices, // Alias for backwards compatibility
   getSmartPresets,
   calculateOctaneScore,
   suggestGasAmount,
   updateNativePrices,
   getGasOnArrivalRecommendation,
 };
+
+// Named export alias
+export { getAllGasPrices as getGasPrices };

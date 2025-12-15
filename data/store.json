@@ -1,7 +1,58 @@
 {
-  "users": [],
+  "users": [
+    {
+      "id": "0x3b0713b2362f7eea221056b557c178f90a4a79ae"
+    }
+  ],
   "watchlists": [],
   "alerts": [],
   "shiftJobs": [],
-  "presets": []
+  "presets": [],
+  "gifts": [],
+  "loyaltyStats": [
+    {
+      "id": "0x3b0713b2362f7eea221056b557c178f90a4a79ae",
+      "lifetimeVolumeUsd": 0,
+      "totalShifts": 0,
+      "totalTopUps": 0,
+      "gasPacksDelivered": 0,
+      "zeroGasRescues": 0,
+      "freeTopupsAvailable": 0,
+      "freeTopupsUsed": 0,
+      "currentTier": "Bronze",
+      "streakDays": 0,
+      "lastActiveDate": "2025-12-15",
+      "joinedAt": "2025-12-15T02:33:05.419Z",
+      "chainStats": {}
+    },
+    {
+      "id": "wallet_0x3b0713b2362f7eea221056b557c178f90a4a79ae",
+      "lifetimeVolumeUsd": 0,
+      "totalShifts": 0,
+      "totalTopUps": 0,
+      "gasPacksDelivered": 0,
+      "zeroGasRescues": 0,
+      "freeTopupsAvailable": 0,
+      "freeTopupsUsed": 0,
+      "currentTier": "Bronze",
+      "streakDays": 0,
+      "lastActiveDate": "2025-12-15",
+      "joinedAt": "2025-12-15T02:36:36.771Z",
+      "chainStats": {}
+    }
+  ],
+  "walletAuths": [
+    {
+      "id": "0x3b0713b2362f7eea221056b557c178f90a4a79ae",
+      "walletAddress": "0x3b0713b2362f7eea221056b557c178f90a4a79ae",
+      "nonce": "",
+      "nonceExpiresAt": 1765766278368,
+      "isAuthenticated": true,
+      "referralCode": "UDYBQ2",
+      "createdAt": "2025-12-15T02:32:58.368Z",
+      "lastAuthAt": "2025-12-15T02:33:05.419Z"
+    }
+  ],
+  "referrals": [],
+  "userActivities": []
 }

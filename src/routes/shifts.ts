@@ -9,6 +9,7 @@ import {
   validateTransactionLimits,
 } from "../middleware/compliance";
 import { rateLimitConfig } from "../middleware/rateLimit";
+import loyalty from "../services/loyalty";
 import * as store from "../store/store";
 import { logger } from "../utils/logger";
 
@@ -352,6 +353,10 @@ router.post(
         expiresAt: shift.expiresAt,
       });
 
+      // Record to loyalty system
+      const volumeUsd = parseFloat(shift.settleAmount || "0") * 2500; // Estimate USD value
+      loyalty.recordShift(userId, shift.settleNetwork, volumeUsd, false, false);
+
       logger.info(
         {
           userId,
@@ -573,6 +578,15 @@ router.post(
         expiresAt: shift.expiresAt,
       });
 
+      // Record to loyalty system
+      const depositMin = parseFloat(shift.depositMin || "0");
+      const volumeUsd =
+        depositMin *
+        (shift.depositCoin === "usdc" || shift.depositCoin === "usdt"
+          ? 1
+          : 2500);
+      loyalty.recordShift(userId, shift.settleNetwork, volumeUsd, false, false);
+
       logger.info(
         {
           userId,
@@ -611,6 +625,46 @@ router.post(
 // ============================================
 // SHIFT STATUS ENDPOINTS
 // ============================================
+
+/**
+ * GET /api/shifts/recent
+ * Get recent shifts (all users, for status dashboard)
+ */
+router.get("/recent", async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit as string) || 10, 50);
+
+    // Get all shift jobs and sort by creation time
+    const allShifts = store.getAllShiftJobs();
+    const recentShifts = allShifts
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      )
+      .slice(0, limit)
+      .map((shift) => ({
+        id: shift.shiftId,
+        status: shift.status,
+        depositCoin: shift.depositCoin,
+        depositNetwork: shift.depositNetwork,
+        settleCoin: shift.settleCoin,
+        settleNetwork: shift.settleNetwork,
+        createdAt: shift.createdAt,
+        depositAmount: shift.depositAmount,
+        settleAmount: shift.settleAmount,
+      }));
+
+    res.json({
+      success: true,
+      data: recentShifts,
+    });
+  } catch (error: any) {
+    logger.error({ error }, "Failed to get recent shifts");
+    res.status(500).json({
+      error: "Internal server error",
+    });
+  }
+});
 
 /**
  * GET /api/shifts/:id

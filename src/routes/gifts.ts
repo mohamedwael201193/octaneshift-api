@@ -2,26 +2,10 @@ import crypto from "crypto";
 import { Router } from "express";
 import { z } from "zod";
 import { authenticateToken } from "../middleware/auth";
+import * as store from "../store/store";
 import { logger } from "../utils/logger";
 
 const router = Router();
-
-// ============================================
-// GIFT STORAGE (in-memory for now, can move to store.ts)
-// ============================================
-
-interface Gift {
-  id: string;
-  chain: string;
-  settleAmount: string;
-  settleAddress: string;
-  message?: string;
-  createdBy: string;
-  createdAt: string;
-  expiresAt?: number;
-}
-
-const gifts = new Map<string, Gift>();
 
 // ============================================
 // SCHEMAS
@@ -72,18 +56,15 @@ router.post("/", async (req: any, res) => {
       ? Date.now() + ttl * 60 * 60 * 1000
       : Date.now() + 30 * 24 * 60 * 60 * 1000;
 
-    const gift: Gift = {
+    store.createGift({
       id: giftId,
       chain,
       settleAmount,
       settleAddress,
       message,
       createdBy: userId,
-      createdAt: new Date().toISOString(),
       expiresAt,
-    };
-
-    gifts.set(giftId, gift);
+    });
 
     const frontendUrl = process.env.FRONTEND_ORIGIN || "http://localhost:5173";
     const shareableUrl = `${frontendUrl}/gift/${giftId}`;
@@ -120,7 +101,7 @@ router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
-    const gift = gifts.get(id);
+    const gift = store.getGift(id);
 
     if (!gift) {
       return res.status(404).json({
@@ -131,7 +112,7 @@ router.get("/:id", async (req, res) => {
 
     // Check expiration
     if (gift.expiresAt && Date.now() > gift.expiresAt) {
-      gifts.delete(id);
+      store.deleteGift(id);
       return res.status(410).json({
         success: false,
         error: "Gift link has expired",
@@ -170,7 +151,7 @@ router.delete("/:id", authenticateToken, async (req: any, res) => {
     const { id } = req.params;
     const userId = req.user!.id;
 
-    const gift = gifts.get(id);
+    const gift = store.getGift(id);
 
     if (!gift) {
       return res.status(404).json({
@@ -186,7 +167,7 @@ router.delete("/:id", authenticateToken, async (req: any, res) => {
       });
     }
 
-    gifts.delete(id);
+    store.deleteGift(id);
 
     return res.json({
       success: true,

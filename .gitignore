@@ -56,10 +56,9 @@ temp/
 
 # TypeScript cache
 *.tsbuildinfo
-docs/phase-implementation-status.md
-docs/phase-g-regional-gating.md
-docs/phase-h-idempotency.md
-docs/phase-e-bot-keyboards.md
+
+# Documentation files (except README.md)
+docs/
 DEPLOYMENT.md
 FIX_CORS_NOW.md
 RENDER_FIX.md
@@ -69,5 +68,21 @@ planwave3.md
 api.md
 example.md
 project-fedback.md
+projectssubmit.md
 ICON_SYSTEM.md
+SUMMARY.md
+DEVELOPMENT.md
+ENVIRONMENT_SETUP.md
+QUICK_REFERENCE.md
+howconnectapi.md
+
+# Test files
 test-icon-eth-base.svg
+test-icon.svg
+test-env.js
+
+# Data files (keep store.json tracked for initial state)
+data/*.json
+!data/store.json
+SUMMARY.md
+SUMMARY.md

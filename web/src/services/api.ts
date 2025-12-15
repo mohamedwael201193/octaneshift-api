@@ -200,6 +200,167 @@ export const octaneAPI = {
     const { data } = await api.get(`/api/coins/search/${query}`);
     return data;
   },
+
+  // Wave 3: Wallet balance endpoints
+  getWalletBalance: async (chain: string, address: string) => {
+    const { data } = await api.get(`/api/wallets/balance/${chain}/${address}`);
+    return data;
+  },
+
+  getWalletBalances: async (address: string, chains?: string[]) => {
+    const { data } = await api.post("/api/wallets/balances", {
+      address,
+      chains,
+    });
+    return data;
+  },
+
+  getWalletHealth: async (address: string) => {
+    const { data } = await api.get(`/api/wallets/health/${address}`);
+    return data;
+  },
+
+  // Wave 3: Gift endpoints
+  createGift: async (params: {
+    chain: string;
+    settleAmount: string;
+    settleAddress: string;
+    message?: string;
+    ttl?: number;
+  }) => {
+    const { data } = await api.post("/api/gifts", params);
+    return data;
+  },
+
+  getGift: async (giftId: string) => {
+    const { data } = await api.get(`/api/gifts/${giftId}`);
+    return data;
+  },
+
+  // =====================================
+  // WALLET AUTH ENDPOINTS
+  // =====================================
+
+  authGetNonce: async (walletAddress: string) => {
+    const { data } = await api.post("/api/auth/nonce", { walletAddress });
+    return data;
+  },
+
+  authVerify: async (params: {
+    walletAddress: string;
+    signature: string;
+    referralCode?: string;
+  }) => {
+    const { data } = await api.post("/api/auth/verify", params);
+    return data;
+  },
+
+  authCheckStatus: async (walletAddress: string) => {
+    const { data } = await api.get(`/api/auth/check/${walletAddress}`);
+    return data;
+  },
+
+  authGetMe: async (walletAddress: string) => {
+    const { data } = await api.get("/api/auth/me", {
+      headers: { Authorization: `Bearer ${walletAddress}` },
+    });
+    return data;
+  },
+
+  authLogout: async (walletAddress: string) => {
+    const { data } = await api.post(
+      "/api/auth/logout",
+      {},
+      { headers: { Authorization: `Bearer ${walletAddress}` } }
+    );
+    return data;
+  },
+
+  // =====================================
+  // REFERRAL ENDPOINTS
+  // =====================================
+
+  getReferralStats: async (walletAddress: string) => {
+    const { data } = await api.get("/api/referrals", {
+      headers: { Authorization: `Bearer ${walletAddress}` },
+    });
+    return data;
+  },
+
+  applyReferralCode: async (walletAddress: string, referralCode: string) => {
+    const { data } = await api.post(
+      "/api/referrals/apply",
+      { referralCode },
+      { headers: { Authorization: `Bearer ${walletAddress}` } }
+    );
+    return data;
+  },
+
+  checkReferralCode: async (code: string) => {
+    const { data } = await api.get(`/api/referrals/code/${code}`);
+    return data;
+  },
+
+  getReferralLinks: async (walletAddress: string) => {
+    const { data } = await api.get("/api/referrals/link", {
+      headers: { Authorization: `Bearer ${walletAddress}` },
+    });
+    return data;
+  },
+
+  getReferralLeaderboard: async (limit?: number) => {
+    const { data } = await api.get(
+      `/api/referrals/leaderboard${limit ? `?limit=${limit}` : ""}`
+    );
+    return data;
+  },
+
+  // =====================================
+  // HISTORY ENDPOINTS
+  // =====================================
+
+  getHistory: async (
+    walletAddress: string,
+    params?: { type?: string; limit?: number; offset?: number }
+  ) => {
+    const { data } = await api.get("/api/history", {
+      headers: { Authorization: `Bearer ${walletAddress}` },
+      params,
+    });
+    return data;
+  },
+
+  getShiftHistory: async (
+    walletAddress: string,
+    params?: { limit?: number; offset?: number }
+  ) => {
+    const { data } = await api.get("/api/history/shifts", {
+      headers: { Authorization: `Bearer ${walletAddress}` },
+      params,
+    });
+    return data;
+  },
+
+  getHistoryStats: async (walletAddress: string) => {
+    const { data } = await api.get("/api/history/stats", {
+      headers: { Authorization: `Bearer ${walletAddress}` },
+    });
+    return data;
+  },
+
+  exportHistory: async (walletAddress: string) => {
+    const { data } = await api.get("/api/history/export", {
+      headers: { Authorization: `Bearer ${walletAddress}` },
+    });
+    return data;
+  },
+
+  getHistorySummary: async (walletAddress: string) => {
+    const { data } = await api.get("/api/history/summary", {
+      headers: { Authorization: `Bearer ${walletAddress}` },
+    });
+    return data;
+  },
 };
 
 export default octaneAPI;

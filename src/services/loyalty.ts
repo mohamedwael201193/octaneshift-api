@@ -1,8 +1,10 @@
 /**
  * Loyalty System - User Stats and Rewards
  * Wave 3 Feature: Volume-based rewards and lifetime tracking
+ * Now uses persistent store instead of in-memory Map
  */
 
+import * as store from "../store/store";
 import { logger } from "../utils/logger";
 
 // Loyalty tiers
@@ -63,32 +65,14 @@ export interface UserStats {
   chainStats: Record<string, { shifts: number; volume: number }>;
 }
 
-// In-memory stats store (would be database in production)
-const userStatsStore: Map<string, UserStats> = new Map();
-
 /**
- * Get or create user stats
+ * Get or create user stats (now uses persistent store)
  */
 export function getUserStats(userId: string): UserStats {
-  let stats = userStatsStore.get(userId);
+  let stats = store.getLoyaltyStats(userId);
 
   if (!stats) {
-    stats = {
-      id: userId,
-      lifetimeVolumeUsd: 0,
-      totalShifts: 0,
-      totalTopUps: 0,
-      gasPacksDelivered: 0,
-      zeroGasRescues: 0,
-      freeTopupsAvailable: 0,
-      freeTopupsUsed: 0,
-      currentTier: "Bronze",
-      streakDays: 0,
-      lastActiveDate: new Date().toISOString().split("T")[0],
-      joinedAt: new Date().toISOString(),
-      chainStats: {},
-    };
-    userStatsStore.set(userId, stats);
+    stats = store.createLoyaltyStats(userId);
   }
 
   return stats;
@@ -222,7 +206,8 @@ export function recordShift(
   }
   stats.lastActiveDate = today;
 
-  userStatsStore.set(userId, stats);
+  // Persist to store
+  store.updateLoyaltyStats(userId, stats);
   return stats;
 }
 
@@ -238,7 +223,7 @@ export function useFreeTopup(userId: string): boolean {
 
   stats.freeTopupsAvailable -= 1;
   stats.freeTopupsUsed += 1;
-  userStatsStore.set(userId, stats);
+  store.updateLoyaltyStats(userId, stats);
 
   logger.info(
     {
@@ -255,10 +240,7 @@ export function useFreeTopup(userId: string): boolean {
  * Get leaderboard (top users by volume)
  */
 export function getLeaderboard(limit: number = 10): UserStats[] {
-  const allStats = Array.from(userStatsStore.values());
-  return allStats
-    .sort((a, b) => b.lifetimeVolumeUsd - a.lifetimeVolumeUsd)
-    .slice(0, limit);
+  return store.getTopLoyaltyUsers(limit);
 }
 
 /**
@@ -273,7 +255,7 @@ export function getPlatformStats(): {
   zeroGasRescues: number;
   avgVolumePerUser: number;
 } {
-  const allStats = Array.from(userStatsStore.values());
+  const allStats = store.getAllLoyaltyStats();
 
   const totalVolume = allStats.reduce((sum, s) => sum + s.lifetimeVolumeUsd, 0);
   const totalShifts = allStats.reduce((sum, s) => sum + s.totalShifts, 0);
@@ -308,7 +290,7 @@ export function addFreeTopups(
 ): UserStats {
   const stats = getUserStats(userId);
   stats.freeTopupsAvailable += count;
-  userStatsStore.set(userId, stats);
+  store.updateLoyaltyStats(userId, stats);
 
   logger.info(
     {

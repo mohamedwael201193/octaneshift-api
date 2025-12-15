@@ -8,10 +8,13 @@
   },
   "scripts": {
     "dev": "tsx src/index.ts",
+    "dev:web": "cd web && npm run dev",
     "build": "tsc",
     "start": "node dist/index.js",
     "type-check": "tsc --noEmit",
-    "lint": "eslint src --ext .ts"
+    "lint": "eslint src --ext .ts",
+    "setup": "npm install && cd web && npm install",
+    "test:api": "tsx test-env.js"
   },
   "keywords": [
     "octaneshift",

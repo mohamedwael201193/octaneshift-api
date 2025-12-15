@@ -2,14 +2,31 @@ import axios from "axios";
 import { motion } from "framer-motion";
 import {
   Activity,
+  ArrowRight,
   BarChart3,
   Clock,
+  ExternalLink,
   Loader2,
+  Search,
   TestTube,
   TrendingUp,
   Zap,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
+import { useNavigate } from "react-router-dom";
+
+interface ShiftItem {
+  id: string;
+  status: string;
+  depositCoin: string;
+  depositNetwork: string;
+  settleCoin: string;
+  settleNetwork: string;
+  createdAt: string;
+  depositAmount?: string;
+  settleAmount?: string;
+}
 
 interface StatusData {
   uptime: {
@@ -31,29 +48,50 @@ interface StatusData {
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
 export default function Status() {
+  const navigate = useNavigate();
   const [status, setStatus] = useState<StatusData | null>(null);
+  const [recentShifts, setRecentShifts] = useState<ShiftItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
   const [testAlertLoading, setTestAlertLoading] = useState(false);
   const [testAlertResult, setTestAlertResult] = useState<string | null>(null);
+  const [shiftLookupId, setShiftLookupId] = useState<string>("");
+
+  const handleShiftLookup = () => {
+    if (shiftLookupId.trim()) {
+      navigate(`/proof/${shiftLookupId.trim()}`);
+    } else {
+      toast.error("Please enter a shift ID");
+    }
+  };
 
   useEffect(() => {
-    const fetchStatus = async () => {
+    const fetchData = async () => {
       try {
-        const response = await axios.get(`${API_BASE_URL}/api/status`);
-        if (response.data.success) {
-          setStatus(response.data.data);
+        const [statusRes, shiftsRes] = await Promise.all([
+          axios.get(`${API_BASE_URL}/api/status`),
+          axios
+            .get(`${API_BASE_URL}/api/shifts/recent`)
+            .catch(() => ({ data: { success: false } })),
+        ]);
+
+        if (statusRes.data.success) {
+          setStatus(statusRes.data.data);
         }
-      } catch (err: any) {
-        setError(err.response?.data?.error || "Failed to fetch status");
+        if (shiftsRes.data.success && shiftsRes.data.data) {
+          setRecentShifts(shiftsRes.data.data);
+        }
+      } catch (err: unknown) {
+        const axiosError = err as { response?: { data?: { error?: string } } };
+        setError(axiosError.response?.data?.error || "Failed to fetch status");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchStatus();
+    fetchData();
     // Refresh every 30 seconds
-    const interval = setInterval(fetchStatus, 30000);
+    const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -154,6 +192,27 @@ export default function Status() {
               {testAlertResult}
             </motion.div>
           )}
+
+          {/* Shift Lookup */}
+          <div className="mt-4 flex gap-2">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+              <input
+                type="text"
+                placeholder="Enter Shift ID to view order..."
+                value={shiftLookupId}
+                onChange={(e) => setShiftLookupId(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleShiftLookup()}
+                className="w-full pl-10 pr-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+            <button
+              onClick={handleShiftLookup}
+              className="px-6 py-3 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg font-semibold transition-colors"
+            >
+              View Shift
+            </button>
+          </div>
         </motion.div>
 
         {/* Metrics Grid */}
@@ -342,6 +401,95 @@ export default function Status() {
             ) : (
               <p className="text-gray-500 text-center py-4 col-span-full">
                 No data yet
+              </p>
+            )}
+          </div>
+        </motion.div>
+
+        {/* Recent Shifts */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.8 }}
+          className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 mt-8"
+        >
+          <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+            <Activity className="w-5 h-5 text-cyan-400" />
+            Recent Shifts
+          </h2>
+          <div className="space-y-3">
+            {recentShifts.length > 0 ? (
+              recentShifts.map((shift) => (
+                <div
+                  key={shift.id}
+                  onClick={() => navigate(`/proof/${shift.id}`)}
+                  className="bg-gray-900/50 hover:bg-gray-900 rounded-lg p-4 cursor-pointer transition-colors border border-transparent hover:border-cyan-500/30 group"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      {/* Status Badge */}
+                      <span
+                        className={`px-2 py-1 rounded text-xs font-semibold uppercase ${
+                          shift.status === "waiting"
+                            ? "bg-yellow-500/20 text-yellow-400"
+                            : shift.status === "settled" ||
+                              shift.status === "complete"
+                            ? "bg-green-500/20 text-green-400"
+                            : shift.status === "expired"
+                            ? "bg-red-500/20 text-red-400"
+                            : "bg-blue-500/20 text-blue-400"
+                        }`}
+                      >
+                        {shift.status}
+                      </span>
+
+                      {/* Swap Pair */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-white font-medium">
+                          {shift.depositCoin.toUpperCase()}
+                        </span>
+                        <span className="text-gray-500 text-sm">
+                          ({shift.depositNetwork})
+                        </span>
+                        <ArrowRight className="w-4 h-4 text-gray-500" />
+                        <span className="text-white font-medium">
+                          {shift.settleCoin.toUpperCase()}
+                        </span>
+                        <span className="text-gray-500 text-sm">
+                          ({shift.settleNetwork})
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                      {/* Shift ID */}
+                      <span className="font-mono text-gray-400 text-sm hidden sm:inline">
+                        {shift.id.slice(0, 8)}...
+                      </span>
+
+                      {/* View Button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/proof/${shift.id}`);
+                        }}
+                        className="flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg text-sm font-semibold transition-colors"
+                      >
+                        View Proof
+                        <ExternalLink className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Time */}
+                  <div className="mt-2 text-xs text-gray-500">
+                    Created: {new Date(shift.createdAt).toLocaleString()}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-gray-500 text-center py-8">
+                No recent shifts. Create your first shift to see it here!
               </p>
             )}
           </div>

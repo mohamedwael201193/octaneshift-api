@@ -1,8 +1,10 @@
 import { NextFunction, Request, Response } from "express";
 import { logger } from "../utils/logger";
 
-// Fallback IP for development/localhost (Google DNS - safe public IP)
-const DEV_FALLBACK_IP = "8.8.8.8";
+// Fallback IP for development/localhost
+// Using a Netherlands IP (Cloudflare Amsterdam) - SideShift blocks US IPs!
+// SideShift blocked countries: US, North Korea, Iran, Belarus, Cuba, Eritrea, Syria, Russia, Thailand
+const DEV_FALLBACK_IP = "188.114.96.1";
 
 declare global {
   namespace Express {

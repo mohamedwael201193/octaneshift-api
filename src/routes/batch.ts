@@ -3,6 +3,7 @@ import { Router } from "express";
 import { z } from "zod";
 import sideshift from "../lib/sideshift";
 import { extractClientIP } from "../middleware/ip";
+import loyalty from "../services/loyalty";
 import * as store from "../store/store";
 import { logger } from "../utils/logger";
 
@@ -193,6 +194,10 @@ router.post("/batch", extractClientIP, async (req: any, res) => {
           settleAmount: item.settleAmount,
           expiresAt: shift.expiresAt,
         });
+
+        // Record to loyalty system for rewards tracking
+        const volumeUsd = parseFloat(item.settleAmount) * 2500; // Estimate USD value (ETH ~$2500)
+        loyalty.recordShift(userId, item.chain, volumeUsd, true, false);
 
         results.push({
           index: i,

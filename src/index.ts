@@ -11,6 +11,7 @@ import { extractClientIP } from "./middleware/ip";
 import { rateLimitConfig } from "./middleware/rateLimit";
 import { addSecurityHeaders, sanitizeInput } from "./middleware/security";
 import adminRoutes from "./routes/admin";
+import authRoutes from "./routes/auth";
 import batchRoutes from "./routes/batch";
 import checkoutRoutes from "./routes/checkout";
 import coinsRoutes from "./routes/coins";
@@ -18,12 +19,14 @@ import deeplinkRoutes from "./routes/deeplink";
 import gasRoutes from "./routes/gas";
 import gasOnArrivalRoutes from "./routes/gasOnArrival";
 import giftsRoutes from "./routes/gifts";
+import historyRoutes from "./routes/history";
 import iconsRoutes from "./routes/icons";
 import loyaltyRoutes from "./routes/loyalty";
 import metaRoutes from "./routes/meta";
 import notificationsRoutes from "./routes/notifications";
 import presetsRoutes from "./routes/presets";
 import proofRoutes from "./routes/proof";
+import referralsRoutes from "./routes/referrals";
 import shiftsRoutes from "./routes/shifts";
 import sideshiftRoutes from "./routes/sideshift";
 import statsRoutes from "./routes/stats";
@@ -32,6 +35,7 @@ import telegramRoutes from "./routes/telegram";
 import testAlertRoutes from "./routes/test-alert";
 import topupRoutes from "./routes/topup";
 import validationRoutes from "./routes/validation";
+import walletsRoutes from "./routes/wallets";
 import watchlistsRoutes from "./routes/watchlists";
 import webhooksRoutes from "./routes/webhooks";
 import * as backgroundJobs from "./services/backgroundJobs";
@@ -554,6 +558,13 @@ app.use("/api/gas-on-arrival", gasOnArrivalRoutes);
 app.use("/api/icons", iconsRoutes);
 app.use("/api/coins", coinsRoutes);
 app.use("/api/validate", validationRoutes);
+app.use("/api/wallets", walletsRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/referrals", referralsRoutes);
+app.use("/api/history", historyRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/referrals", referralsRoutes);
+app.use("/api/history", historyRoutes);
 
 // Debug endpoint for SideShift order creation
 app.post("/api/test/create-shift", express.json(), async (req, res) => {
@@ -697,12 +708,6 @@ const userScenarioHandler = async (_req: any, res: any) => {
     const shift = await sideshift.default.createVariableShift(userParams);
     console.log("✅ Shift created:", shift);
 
-    res.json({
-      success: true,
-      pair,
-      shift,
-      message: "User scenario test successful",
-    });
     res.json({
       success: true,
       pair,
