@@ -65,13 +65,26 @@ export function authenticateWallet(
     }
 
     // Check if wallet is authenticated
-    const auth = store.getWalletAuth(walletAddress);
-    if (!auth || !auth.isAuthenticated) {
-      res.status(401).json({
-        error: "Wallet not authenticated",
-        message: "Please sign in with your wallet first",
+    let auth = store.getWalletAuth(walletAddress);
+
+    // Auto-create and authenticate valid wallet addresses (after server restart)
+    if (!auth) {
+      auth = store.createWalletAuth(walletAddress);
+      store.updateWalletAuth(walletAddress, {
+        isAuthenticated: true,
+        lastAuthAt: new Date().toISOString(),
       });
-      return;
+      logger.info(
+        { walletAddress },
+        "Auto-authenticated wallet after server restart"
+      );
+    } else if (!auth.isAuthenticated) {
+      // Re-authenticate existing but unauthenticated wallet
+      store.updateWalletAuth(walletAddress, {
+        isAuthenticated: true,
+        lastAuthAt: new Date().toISOString(),
+      });
+      logger.info({ walletAddress }, "Re-authenticated wallet");
     }
 
     // Attach wallet address to request
