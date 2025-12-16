@@ -122,9 +122,24 @@ export default function History() {
         octaneAPI.getShiftHistory(address!),
       ]);
 
-      setActivities(activitiesRes.activities);
-      setShifts(shiftsRes.shifts);
-      setStats(activitiesRes.stats);
+      setActivities(activitiesRes.activities || []);
+      setShifts(shiftsRes.shifts || []);
+
+      // Calculate stats from actual shifts data (more accurate)
+      const shiftsData = shiftsRes.shifts || [];
+      const calculatedStats: Stats = {
+        totalShifts: shiftsData.length,
+        totalTopUps: activitiesRes.stats?.totalTopUps || 0,
+        totalGifts: activitiesRes.stats?.totalGifts || 0,
+        totalVolumeUsd: shiftsData.reduce((sum: number, s: Shift) => {
+          // Estimate USD value from settle amount (rough estimate)
+          const amount = parseFloat(s.settleAmount || s.depositAmount || "0");
+          return sum + amount;
+        }, 0),
+        lastActive: shiftsData.length > 0 ? shiftsData[0].createdAt : null,
+      };
+
+      setStats(calculatedStats);
       setError(null);
     } catch (err: any) {
       setError(err.message || "Failed to load history");
