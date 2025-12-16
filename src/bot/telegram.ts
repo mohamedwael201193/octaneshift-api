@@ -257,12 +257,16 @@ export class TelegramBotService {
             { text: "📊 My Shifts", callback_data: "my_shifts" },
           ],
           [
-            { text: "� Notifications", callback_data: "notifications" },
+            { text: "🔔 Notifications", callback_data: "notifications" },
             { text: "💱 Create Shift", callback_data: "create_shift" },
           ],
           [
-            { text: "�💡 How it Works", callback_data: "how_it_works" },
+            { text: "💡 How it Works", callback_data: "how_it_works" },
             { text: "🔗 Supported Chains", callback_data: "supported_chains" },
+          ],
+          [
+            { text: "📈 Gas Prices", callback_data: "gas_prices" },
+            { text: "🎁 Referrals", callback_data: "referrals" },
           ],
           ...(isDev
             ? [[{ text: "🧪 Test Bot", callback_data: "test_bot" }]]
@@ -271,7 +275,7 @@ export class TelegramBotService {
       };
 
       return ctx.reply(
-        `� *Welcome${userName ? ` ${userName}` : ""}!*\n\n` +
+        `◆ *Welcome ${userName}!*\n\n` +
           `🚀 *OctaneShift* helps you get native gas tokens across multiple blockchain networks instantly.\n\n` +
           `*Quick Start:*\n` +
           `• Tap *Quick Top-up* below to start\n` +
@@ -431,6 +435,94 @@ export class TelegramBotService {
       await this.handleNotifications(ctx);
     });
 
+    // Gas prices command
+    this.bot.command("gas", async (ctx): Promise<void> => {
+      await ctx.reply(
+        "📈 *Live Gas Prices*\n\n" +
+          "⛽ **Ethereum** - ~15-25 gwei\n" +
+          "🔵 **Base** - ~0.001 gwei (very cheap!)\n" +
+          "🔶 **Arbitrum** - ~0.1 gwei\n" +
+          "🟣 **Optimism** - ~0.001 gwei\n" +
+          "🟣 **Polygon** - ~30-50 gwei\n" +
+          "🔴 **Avalanche** - ~25-35 nAVAX\n\n" +
+          "💡 *Tip:* L2 chains like Base, Arbitrum, and Optimism have very low fees!\n\n" +
+          "🌐 Check live prices: [Gas Dashboard](https://octaneshift.vercel.app/gas)",
+        {
+          parse_mode: "Markdown",
+          link_preview_options: { is_disabled: true },
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "⛽ Top Up Now", callback_data: "quick_topup" }],
+              [{ text: "🏠 Main Menu", callback_data: "main_menu" }],
+            ],
+          },
+        }
+      );
+    });
+
+    // Help command
+    this.bot.command("help", async (ctx): Promise<void> => {
+      await ctx.reply(
+        "📚 *OctaneShift Help*\n\n" +
+          "*Quick Commands:*\n" +
+          "━━━━━━━━━━━━━━━━━━━\n" +
+          "⛽ `/topup <chain> <amount>` - Gas top-up\n" +
+          "📊 `/status <id>` - Check shift status\n" +
+          "❌ `/cancel_order <id>` - Cancel a shift\n" +
+          "📈 `/gas` - View gas prices\n" +
+          "🔔 `/notifications` - View notifications\n" +
+          "📋 `/shifts` - Your shift history\n\n" +
+          "*Examples:*\n" +
+          "━━━━━━━━━━━━━━━━━━━\n" +
+          "• `/topup base 0.01` - 0.01 ETH on Base\n" +
+          "• `/topup arb 0.005` - 0.005 ETH on Arbitrum\n" +
+          "• `/topup pol 5` - 5 POL on Polygon\n\n" +
+          "*Supported Chains:*\n" +
+          "Base, Ethereum, Arbitrum, Optimism, Polygon, Avalanche, BSC, Solana\n\n" +
+          "🌐 *Web App:* [octaneshift.vercel.app](https://octaneshift.vercel.app)\n" +
+          "💬 *Support:* @OctaneShiftSupport",
+        {
+          parse_mode: "Markdown",
+          link_preview_options: { is_disabled: true },
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "🏠 Main Menu", callback_data: "main_menu" }],
+            ],
+          },
+        }
+      );
+    });
+
+    // Web command - link to web app
+    this.bot.command("web", async (ctx): Promise<void> => {
+      await ctx.reply(
+        "🌐 *OctaneShift Web App*\n\n" +
+          "Access all features on our web app:\n\n" +
+          "✨ *Features:*\n" +
+          "• Full swap interface\n" +
+          "• Gas-on-Arrival (swap + gas in one!)\n" +
+          "• Batch top-ups (50 addresses)\n" +
+          "• Loyalty rewards program\n" +
+          "• Transaction history\n" +
+          "• Referral dashboard\n\n" +
+          "👇 *Click below to open:*",
+        {
+          parse_mode: "Markdown",
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: "🚀 Open OctaneShift",
+                  url: "https://octaneshift.vercel.app",
+                },
+              ],
+              [{ text: "🏠 Main Menu", callback_data: "main_menu" }],
+            ],
+          },
+        }
+      );
+    });
+
     // Handle callback queries
     this.bot.on("callback_query", async (ctx) => {
       const callbackQuery = ctx.callbackQuery;
@@ -507,22 +599,27 @@ export class TelegramBotService {
                 inline_keyboard: [
                   [
                     { text: "🔵 Base", callback_data: "chain_base" },
-                    { text: "🔷 Ethereum", callback_data: "chain_eth" },
+                    { text: "� Ethereum", callback_data: "chain_eth" },
                   ],
                   [
                     { text: "🔶 Arbitrum", callback_data: "chain_arb" },
-                    { text: "🟣 Optimism", callback_data: "chain_op" },
+                    { text: "🔴 Optimism", callback_data: "chain_op" },
                   ],
                   [
-                    { text: "🟣 Polygon", callback_data: "chain_pol" },
-                    { text: "🔴 Avalanche", callback_data: "chain_avax" },
+                    { text: "💜 Polygon", callback_data: "chain_pol" },
+                    { text: "❄️ Avalanche", callback_data: "chain_avax" },
+                  ],
+                  [
+                    { text: "🟡 BSC", callback_data: "chain_bsc" },
+                    { text: "🌀 Solana", callback_data: "chain_sol" },
                   ],
                   [{ text: "❌ Cancel", callback_data: "cancel_action" }],
                 ],
               };
               await ctx.reply(
                 "⛽ *Quick Top-up*\n\n" +
-                  "Select the chain you want to top up:",
+                  "Select the chain you want to top up:\n\n" +
+                  "💡 _L2 chains (Base, Arbitrum, Optimism) have very low gas fees!_",
                 {
                   parse_mode: "Markdown",
                   reply_markup: chainsKeyboard,
@@ -534,10 +631,28 @@ export class TelegramBotService {
               await ctx.answerCbQuery();
               await ctx.reply(
                 "📊 *Your Recent Shifts*\n\n" +
-                  "Use `/shifts` command to view your shift history.\n\n" +
-                  "To check a specific shift status:\n" +
-                  "`/status <shiftId>`",
-                { parse_mode: "Markdown" }
+                  "📋 *Check a shift:* `/status <shiftId>`\n\n" +
+                  "💡 *Tip:* You receive a Shift ID when you create an order. Use it to track your transaction!\n\n" +
+                  "🌐 *View full history:* [Transaction History](https://octaneshift.vercel.app/history)\n\n" +
+                  "_Connect your wallet on the web app to see all your shifts._",
+                {
+                  parse_mode: "Markdown",
+                  link_preview_options: { is_disabled: true },
+                  reply_markup: {
+                    inline_keyboard: [
+                      [
+                        {
+                          text: "🌐 View on Web",
+                          url: "https://octaneshift.vercel.app/history",
+                        },
+                      ],
+                      [
+                        { text: "⛽ New Top-up", callback_data: "quick_topup" },
+                        { text: "🏠 Menu", callback_data: "main_menu" },
+                      ],
+                    ],
+                  },
+                }
               );
               return;
 
@@ -557,14 +672,25 @@ export class TelegramBotService {
                 "🔗 *Supported Chains*\n\n" +
                   "You can top up gas on these networks:\n\n" +
                   "🔵 **Base** - base, BASE\n" +
-                  "🔷 **Ethereum** - eth, ethereum, ETH\n" +
+                  "� **Ethereum** - eth, ethereum, ETH\n" +
                   "🔶 **Arbitrum** - arb, arbitrum, ARB\n" +
-                  "🟣 **Optimism** - op, optimism, OP\n" +
-                  "🟣 **Polygon** - pol, polygon\n" +
-                  "🔴 **Avalanche** - avax, avalanche, AVAX\n\n" +
+                  "🔴 **Optimism** - op, optimism, OP\n" +
+                  "💜 **Polygon** - pol, polygon\n" +
+                  "❄️ **Avalanche** - avax, avalanche, AVAX\n" +
+                  "🟡 **BSC** - bsc, bnb\n" +
+                  "🌀 **Solana** - sol, solana\n\n" +
+                  "💡 *40+ chains supported!*\n\n" +
                   "*Usage:* `/topup <chain> <amount>`\n" +
                   "*Example:* `/topup base 0.01`",
-                { parse_mode: "Markdown" }
+                {
+                  parse_mode: "Markdown",
+                  reply_markup: {
+                    inline_keyboard: [
+                      [{ text: "⛽ Top Up Now", callback_data: "quick_topup" }],
+                      [{ text: "🔙 Back", callback_data: "main_menu" }],
+                    ],
+                  },
+                }
               );
               return;
 
@@ -605,16 +731,34 @@ export class TelegramBotService {
               await ctx.answerCbQuery();
               await ctx.reply(
                 "💡 *How OctaneShift Works*\n\n" +
-                  "1️⃣ Choose your target chain and amount\n" +
-                  "2️⃣ Select your deposit asset (USDC, USDT, etc.)\n" +
-                  "3️⃣ Send crypto to the provided deposit address\n" +
-                  "4️⃣ Receive native gas tokens instantly!\n" +
-                  "5️⃣ Track progress with the shift ID\n\n" +
-                  "✅ Powered by SideShift.ai\n" +
-                  "✅ Non-custodial and secure\n" +
-                  "✅ Fast cross-chain swaps\n" +
-                  "✅ No registration required",
-                { parse_mode: "Markdown" }
+                  "Get gas tokens in 4 easy steps:\n\n" +
+                  "1️⃣ *Choose* your target chain and amount\n" +
+                  "2️⃣ *Select* your deposit asset (USDC, USDT, BTC, etc.)\n" +
+                  "3️⃣ *Send* crypto to the provided deposit address\n" +
+                  "4️⃣ *Receive* native gas tokens instantly! 🎉\n\n" +
+                  "━━━━━━━━━━━━━━━━━━━\n\n" +
+                  "✅ *Powered by SideShift.ai*\n" +
+                  "✅ *Non-custodial & secure*\n" +
+                  "✅ *200+ tokens supported*\n" +
+                  "✅ *40+ chains supported*\n" +
+                  "✅ *No registration required*\n" +
+                  "✅ *~30 second swaps*\n\n" +
+                  "🌐 *Web App:* [octaneshift.vercel.app](https://octaneshift.vercel.app)",
+                {
+                  parse_mode: "Markdown",
+                  link_preview_options: { is_disabled: true },
+                  reply_markup: {
+                    inline_keyboard: [
+                      [
+                        {
+                          text: "⛽ Get Started",
+                          callback_data: "quick_topup",
+                        },
+                      ],
+                      [{ text: "🔙 Back", callback_data: "main_menu" }],
+                    ],
+                  },
+                }
               );
               return;
 
@@ -766,12 +910,74 @@ export class TelegramBotService {
                       callback_data: "supported_chains",
                     },
                   ],
+                  [
+                    { text: "📈 Gas Prices", callback_data: "gas_prices" },
+                    { text: "🎁 Referrals", callback_data: "referrals" },
+                  ],
                 ],
               };
               await ctx.reply("🏠 *Main Menu*\n\nChoose an option:", {
                 parse_mode: "Markdown",
                 reply_markup: keyboard,
               });
+              return;
+
+            case "gas_prices":
+              await ctx.answerCbQuery();
+              await ctx.reply(
+                "📈 *Live Gas Prices*\n\n" +
+                  "⛽ **Ethereum** - ~15-25 gwei\n" +
+                  "🔵 **Base** - ~0.001 gwei (very cheap!)\n" +
+                  "🔶 **Arbitrum** - ~0.1 gwei\n" +
+                  "🟣 **Optimism** - ~0.001 gwei\n" +
+                  "🟣 **Polygon** - ~30-50 gwei\n" +
+                  "🔴 **Avalanche** - ~25-35 nAVAX\n\n" +
+                  "💡 *Tip:* L2 chains like Base, Arbitrum, and Optimism have very low fees!\n\n" +
+                  "🌐 Check live prices: [OctaneShift Gas Dashboard](https://octaneshift.vercel.app/gas)",
+                {
+                  parse_mode: "Markdown",
+                  link_preview_options: { is_disabled: true },
+                  reply_markup: {
+                    inline_keyboard: [
+                      [{ text: "⛽ Top Up Now", callback_data: "quick_topup" }],
+                      [{ text: "🔙 Back", callback_data: "main_menu" }],
+                    ],
+                  },
+                }
+              );
+              return;
+
+            case "referrals":
+              await ctx.answerCbQuery();
+              await ctx.reply(
+                "🎁 *OctaneShift Referral Program*\n\n" +
+                  "Earn rewards by inviting friends!\n\n" +
+                  "💰 *How it works:*\n" +
+                  "• Share your referral link\n" +
+                  "• Friends sign up and make shifts\n" +
+                  "• You earn 0.5% of their volume!\n\n" +
+                  "🏆 *Benefits:*\n" +
+                  "✅ Passive income on every referral shift\n" +
+                  "✅ No limit on referrals\n" +
+                  "✅ Lifetime earnings from referrals\n\n" +
+                  "📱 *Get your referral link:*\n" +
+                  "Visit [OctaneShift Referrals](https://octaneshift.vercel.app) and connect your wallet to get your unique code!",
+                {
+                  parse_mode: "Markdown",
+                  link_preview_options: { is_disabled: true },
+                  reply_markup: {
+                    inline_keyboard: [
+                      [
+                        {
+                          text: "🌐 Open Web App",
+                          url: "https://octaneshift.vercel.app",
+                        },
+                      ],
+                      [{ text: "🔙 Back", callback_data: "main_menu" }],
+                    ],
+                  },
+                }
+              );
               return;
 
             default:
@@ -1129,10 +1335,11 @@ export class TelegramBotService {
         inline_keyboard: [
           [{ text: "⛽ Quick Gas Top-up", callback_data: "quick_topup" }],
           [
-            { text: "🔀 Fixed Shift", callback_data: "shift_fixed" },
-            { text: "🔄 Variable Shift", callback_data: "shift_variable" },
+            { text: "� Fixed Rate", callback_data: "shift_fixed" },
+            { text: "📊 Variable Rate", callback_data: "shift_variable" },
           ],
-          [{ text: "💡 What's the difference?", callback_data: "shift_info" }],
+          [{ text: "💡 Fixed vs Variable?", callback_data: "shift_info" }],
+          [{ text: "🌐 Use Web App", url: "https://octaneshift.vercel.app" }],
           [{ text: "❌ Cancel", callback_data: "cancel_action" }],
         ],
       };
@@ -1140,14 +1347,14 @@ export class TelegramBotService {
       await ctx.reply(
         "💱 *Create New Shift*\n\n" +
           "Choose your shift type:\n\n" +
-          "⛽ **Quick Gas Top-up** - Fast gas refills for common chains\n\n" +
-          "🔀 **Fixed Shift** - You know exactly how much you'll receive\n" +
-          "   • Fixed rate guaranteed\n" +
-          "   • Must deposit exact amount\n\n" +
-          "🔄 **Variable Shift** - Flexible deposit amount\n" +
-          "   • Rate determined at deposit time\n" +
-          "   • Deposit any amount within range\n\n" +
-          "Select an option below:",
+          "⛽ *Quick Gas Top-up*\n" +
+          "└ Fast gas refills for popular chains\n\n" +
+          "🔒 *Fixed Rate Shift*\n" +
+          "└ Rate locked • Exact amounts • Precise\n\n" +
+          "📊 *Variable Rate Shift*\n" +
+          "└ Flexible amounts • Market rate\n\n" +
+          "🌐 *Web App* - Full features including:\n" +
+          "└ Gas-on-Arrival • Batch ops • History",
         {
           parse_mode: "Markdown",
           reply_markup: keyboard,
