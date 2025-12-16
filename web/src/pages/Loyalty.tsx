@@ -94,21 +94,45 @@ export default function Loyalty() {
   const fetchLoyaltyStats = async () => {
     setLoading(true);
     try {
+      // Fetch actual shift history to calculate real volume
+      let realTotalShifts = 0;
+      let realTotalVolume = 0;
+
+      try {
+        const shiftsResponse = await api.getShiftHistory(userId);
+        const shifts = shiftsResponse.shifts || [];
+        realTotalShifts = shifts.length;
+        // Calculate real volume from settle amounts
+        realTotalVolume = shifts.reduce((sum: number, s: any) => {
+          const amount = parseFloat(s.settleAmount || s.depositAmount || "0");
+          return sum + amount;
+        }, 0);
+      } catch (e) {
+        // If can't fetch shifts, use 0
+        console.log("Could not fetch shift history for loyalty");
+      }
+
       const response = await api.getLoyaltyStats(userId);
       // Handle API response - ensure all required fields exist
       const data = response.data || response;
 
-      // Handle tier - it might be a string or an object with a name property
+      // Handle tier - calculate based on REAL volume
       let tierName = "bronze";
-      if (typeof data.tier === "string") {
-        tierName = data.tier;
-      } else if (data.tier?.name) {
-        tierName = data.tier.name;
-      } else if (typeof data.currentTier === "string") {
-        tierName = data.currentTier;
-      } else if (data.currentTier?.name) {
-        tierName = data.currentTier.name;
+      if (realTotalVolume >= 10000) {
+        tierName = "platinum";
+      } else if (realTotalVolume >= 2000) {
+        tierName = "gold";
+      } else if (realTotalVolume >= 500) {
+        tierName = "silver";
       }
+
+      // Calculate free topups based on real tier
+      const freeTopupsByTier: Record<string, number> = {
+        bronze: 0,
+        silver: 1,
+        gold: 3,
+        platinum: 5,
+      };
 
       setStats({
         userId: data.userId || userId,
@@ -118,18 +142,13 @@ export default function Loyalty() {
             | "silver"
             | "gold"
             | "platinum") || "bronze",
-        totalVolume: data.totalVolume || data.lifetimeVolumeUsd || 0,
-        totalShifts: data.totalShifts || 0,
+        totalVolume: realTotalVolume, // Use REAL volume from shifts
+        totalShifts: realTotalShifts, // Use REAL shift count
         totalGasTopups: data.totalGasTopups || data.gasPacksDelivered || 0,
-        freeTopupsAvailable: data.freeTopupsAvailable || 0,
+        freeTopupsAvailable: freeTopupsByTier[tierName] || 0,
         freeTopupsUsed: data.freeTopupsUsed || 0,
-        nextTierProgress:
-          data.nextTierProgress ||
-          data.totalVolume ||
-          data.lifetimeVolumeUsd ||
-          0,
-        nextTierRequirement:
-          data.nextTierRequirement || getNextTierRequirement(tierName),
+        nextTierProgress: realTotalVolume,
+        nextTierRequirement: getNextTierRequirement(tierName),
         benefits: Array.isArray(data.benefits)
           ? data.benefits
           : getTierBenefits(tierName),
@@ -147,7 +166,7 @@ export default function Loyalty() {
         freeTopupsAvailable: 0,
         freeTopupsUsed: 0,
         nextTierProgress: 0,
-        nextTierRequirement: 200,
+        nextTierRequirement: 500,
         benefits: getTierBenefits("bronze"),
         joinDate: new Date().toISOString(),
         streakDays: 0,
